@@ -14,11 +14,26 @@ const api = {
   recordStockTransaction: (payload) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECORD, payload),
   getStockBalance: (productId, warehouseId) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_BALANCE, { productId, warehouseId }),
   getDashboardSummary: () => ipcRenderer.invoke(IPC_CHANNELS.DASHBOARD_SUMMARY),
-  getRecentVouchers: (limit = 10) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, { limit }),
+  getRecentVouchers: (limit = 10, type = null) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, { limit, type }),
+  getItemLedger: (productId) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_ITEM_LEDGER, productId),
+  getDailyStockSummary: (filters) => ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_SUMMARY, filters),
   exportReport: (payload) => ipcRenderer.invoke(IPC_CHANNELS.REPORT_EXPORT, payload),
   createBackup: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_CREATE),
   restoreBackup: (backupPath) => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RESTORE, backupPath),
-  getAuditLogs: (limit) => ipcRenderer.invoke(IPC_CHANNELS.AUDIT_RECENT, limit)
+  getAuditLogs: (limit) => ipcRenderer.invoke(IPC_CHANNELS.AUDIT_RECENT, limit),
+  savePurchaseVoucher: (payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_SAVE, payload),
+  getNextPurchaseVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_GET_NEXT_NO),
+  saveSaleReturnVoucher: (payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_RETURN_SAVE, payload),
+  getNextSaleReturnVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_RETURN_GET_NEXT_NO),
+  saveProductionVoucher: (payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PRODUCTION_SAVE, payload),
+  getNextProductionVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PRODUCTION_GET_NEXT_NO),
+  getProductionSettings: () => ipcRenderer.invoke(IPC_CHANNELS.PRODUCTION_SETTINGS_GET),
+  updateProductionSettings: (payload) => ipcRenderer.invoke(IPC_CHANNELS.PRODUCTION_SETTINGS_UPDATE, payload),
+  saveSaleVoucher: (payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_SAVE, payload),
+  getNextSaleVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_GET_NEXT_NO),
+  savePurchaseReturnVoucher: (payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_SAVE, payload),
+  getNextPurchaseReturnVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO),
+  getNextPartyCode: () => ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE)
 };
 
 contextBridge.exposeInMainWorld('stockOps', api);

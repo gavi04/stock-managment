@@ -6,7 +6,15 @@ import { AppShell } from './components/AppShell.jsx';
 import { DashboardView } from './components/DashboardView.jsx';
 import { MasterPanel } from './components/MasterPanel.jsx';
 import { VoucherEntryPanel } from './components/VoucherEntryPanel.jsx';
+import { PurchaseVoucherPanel } from './components/PurchaseVoucherPanel.jsx';
+import { SaleReturnVoucherPanel } from './components/SaleReturnVoucherPanel.jsx';
+import { SaleVoucherPanel } from './components/SaleVoucherPanel.jsx';
+import { PurchaseReturnVoucherPanel } from './components/PurchaseReturnVoucherPanel.jsx';
+import { ProductionVoucherPanel } from './components/ProductionVoucherPanel.jsx';
 import { StockMasterPanel } from './components/StockMasterPanel.jsx';
+import { PartyMasterPanel } from './components/PartyMasterPanel.jsx';
+import { ItemLedgerPanel } from './components/ItemLedgerPanel.jsx';
+import { DailyStockSummaryPanel } from './components/DailyStockSummaryPanel.jsx';
 
 export default function App() {
   const {
@@ -124,6 +132,19 @@ export default function App() {
     }
   };
 
+  const updateMasterRecord = async (entity, id, payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.updateMaster(entity, id, payload);
+      await refreshMasters();
+    } catch (err) {
+      setError(err.message || 'Unable to update record');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const createProduct = async (payload) => {
     setBusy(true);
     setError(null);
@@ -219,6 +240,71 @@ export default function App() {
     }
   };
 
+  const postPurchaseVoucher = async (payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.savePurchaseVoucher(payload);
+      await Promise.all([refreshDashboard(), refreshMasters()]);
+    } catch (voucherError) {
+      setError(voucherError.message || 'Unable to save purchase voucher');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const postSaleReturnVoucher = async (payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.saveSaleReturnVoucher(payload);
+      await Promise.all([refreshDashboard(), refreshMasters()]);
+    } catch (voucherError) {
+      setError(voucherError.message || 'Unable to save sale return voucher');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const postProductionVoucher = async (payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.saveProductionVoucher(payload);
+      await Promise.all([refreshDashboard(), refreshMasters()]);
+    } catch (voucherError) {
+      setError(voucherError.message || 'Unable to save production voucher');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const postSaleVoucher = async (payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.saveSaleVoucher(payload);
+      await Promise.all([refreshDashboard(), refreshMasters()]);
+    } catch (voucherError) {
+      setError(voucherError.message || 'Unable to save sale voucher');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const postPurchaseReturnVoucher = async (payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.savePurchaseReturnVoucher(payload);
+      await Promise.all([refreshDashboard(), refreshMasters()]);
+    } catch (voucherError) {
+      setError(voucherError.message || 'Unable to save purchase return voucher');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const renderView = () => {
     if (activeView === 'dashboard') {
       return <DashboardView summary={dashboard} vouchers={vouchers} />;
@@ -240,11 +326,11 @@ export default function App() {
 
     if (activeView === 'party-master') {
       return (
-        <MasterPanel
-          type="party"
-          title="Party"
+        <PartyMasterPanel
           rows={parties}
+          busy={busy}
           onCreate={(values) => createMaster('party', values)}
+          onUpdate={(id, values) => updateMasterRecord('party', id, values)}
           onDelete={(id) => deleteMaster('party', id)}
         />
       );
@@ -252,74 +338,64 @@ export default function App() {
 
     if (activeView === 'purchase-entry') {
       return (
-        <VoucherEntryPanel
-          title="Purchase Entry"
+        <PurchaseVoucherPanel
           products={products}
           parties={parties}
-          onSubmitVoucher={(values) => postVoucher('purchase', values)}
-          sign={1}
+          busy={busy}
+          onSave={postPurchaseVoucher}
         />
       );
     }
 
     if (activeView === 'sale-entry') {
       return (
-        <VoucherEntryPanel
-          title="Sale Entry"
+        <SaleVoucherPanel
           products={products}
           parties={parties}
-          onSubmitVoucher={(values) => postVoucher('sale', values)}
-          sign={-1}
+          busy={busy}
+          onSave={postSaleVoucher}
         />
       );
     }
 
     if (activeView === 'sale-return-entry') {
       return (
-        <VoucherEntryPanel
-          title="Sale Return Entry"
+        <SaleReturnVoucherPanel
           products={products}
           parties={parties}
-          onSubmitVoucher={(values) => postVoucher('sale_return', values)}
-          sign={1}
+          busy={busy}
+          onSave={postSaleReturnVoucher}
         />
       );
     }
 
     if (activeView === 'purchase-return-entry') {
       return (
-        <VoucherEntryPanel
-          title="Purchase Return Entry"
+        <PurchaseReturnVoucherPanel
           products={products}
           parties={parties}
-          onSubmitVoucher={(values) => postVoucher('purchase_return', values)}
-          sign={-1}
+          busy={busy}
+          onSave={postPurchaseReturnVoucher}
         />
       );
     }
 
-    if (activeView === 'production-entry') {
+    if (activeView === 'production-entry' || activeView === 'issue-production') {
       return (
-        <VoucherEntryPanel
-          title="Production Entry"
+        <ProductionVoucherPanel
           products={products}
-          parties={parties}
-          onSubmitVoucher={(values) => postVoucher('production_in', values)}
-          sign={1}
+          busy={busy}
+          onSave={postProductionVoucher}
         />
       );
     }
 
-    if (activeView === 'issue-production') {
-      return (
-        <VoucherEntryPanel
-          title="Issue To Production"
-          products={products}
-          parties={parties}
-          onSubmitVoucher={(values) => postVoucher('production_out', values)}
-          sign={-1}
-        />
-      );
+    if (activeView === 'item-stock-ledger') {
+      return <ItemLedgerPanel products={products} />;
+    }
+
+    if (activeView === 'daily-stock-summary') {
+      return <DailyStockSummaryPanel products={products} categories={categories} />;
     }
 
     return (

@@ -11,7 +11,8 @@ const schema = z.object({
   notes: z.string().optional()
 });
 
-export function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, sign = 1 }) {
+export function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, sign = 1, transactionType }) {
+  const [recentVouchers, setRecentVouchers] = useState([]);
   const [availableStock, setAvailableStock] = useState(0);
   const [loadingStock, setLoadingStock] = useState(false);
   const defaultValues = useMemo(
@@ -70,6 +71,21 @@ export function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, s
     };
   }, [selectedProduct?.id, sign]);
 
+  const loadRecentVouchers = async () => {
+    if (transactionType) {
+      try {
+        const history = await window.stockOps.getRecentVouchers(10, transactionType);
+        setRecentVouchers(history);
+      } catch (err) {
+        console.error('Failed to load recent vouchers', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadRecentVouchers();
+  }, [transactionType]);
+
   const submit = async (values) => {
     const quantity = Number(values.quantity) * sign;
 
@@ -84,9 +100,11 @@ export function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, s
     clearErrors('quantity');
     await onSubmitVoucher({ ...values, quantity });
     reset(defaultValues);
+    await loadRecentVouchers();
   };
 
   return (
+    <div className="voucher-entry-view" style={{ display: 'grid', gap: '14px', minWidth: 0 }}>
     <section className="panel">
       <h2>{title}</h2>
       <form className="inline-form" onSubmit={handleSubmit(submit)}>
@@ -144,5 +162,38 @@ export function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, s
         <button type="submit">Post Voucher</button>
       </form>
     </section>
+    
+    <section className="panel" style={{ marginTop: '14px' }}>
+      <h2>Recent {title}s</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Voucher No</th>
+            <th>Date</th>
+            <th>Item</th>
+            <th>Party</th>
+            <th>Qty / Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recentVouchers.length === 0 ? (
+            <tr>
+              <td colSpan={5}>No recent vouchers found.</td>
+            </tr>
+          ) : (
+            recentVouchers.map((voucher) => (
+              <tr key={voucher.voucher_no}>
+                <td>{voucher.voucher_no}</td>
+                <td>{new Date(voucher.date).toLocaleString()}</td>
+                <td>{voucher.item || '-'}</td>
+                <td>{voucher.party}</td>
+                <td>{Number(voucher.total).toFixed(2)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </section>
+    </div>
   );
 }

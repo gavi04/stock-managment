@@ -130,6 +130,7 @@ button:disabled {
   min-height: 0;
   display: grid;
   grid-template-columns: clamp(230px, 20vw, 270px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--page-bg);
   overflow: hidden;
 }
@@ -320,8 +321,8 @@ th {
 
 .inline-form {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
   align-items: end;
 }
 
@@ -475,6 +476,7 @@ th {
 @media (max-width: 1200px) {
   .erp-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .sidebar {

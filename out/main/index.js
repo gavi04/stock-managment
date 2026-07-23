@@ -64,6 +64,7 @@ const schemaStatements = [
     allow_negative_stock INTEGER NOT NULL DEFAULT 0,
     enable_auto_backup INTEGER NOT NULL DEFAULT 1,
     backup_interval_hours INTEGER NOT NULL DEFAULT 24,
+    production_settings_json TEXT DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );`,
@@ -101,8 +102,14 @@ const schemaStatements = [
     code TEXT NOT NULL UNIQUE,
     type TEXT NOT NULL CHECK (type IN ('customer', 'supplier', 'both')),
     phone TEXT,
+    mobile TEXT,
     email TEXT,
     address TEXT,
+    city TEXT,
+    district TEXT,
+    state TEXT,
+    pin_code TEXT,
+    gstin TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TEXT
@@ -127,13 +134,21 @@ const schemaStatements = [
   );`,
   `CREATE TABLE IF NOT EXISTS purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_no TEXT NOT NULL UNIQUE,
+    voucher_no TEXT NOT NULL UNIQUE,
+    invoice_no TEXT,
     supplier_id INTEGER,
     warehouse_id INTEGER NOT NULL,
     purchase_date TEXT NOT NULL,
+    batch_no TEXT,
+    expiry_date TEXT,
+    vehicle_no TEXT,
+    bilty_no TEXT,
+    broker TEXT,
+    remarks TEXT,
     status TEXT NOT NULL DEFAULT 'posted',
+    taxable_value REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
     total_amount REAL NOT NULL DEFAULT 0,
-    notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TEXT,
@@ -144,8 +159,15 @@ const schemaStatements = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     purchase_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
+    hsn TEXT,
+    pcs REAL,
     quantity REAL NOT NULL,
-    rate REAL NOT NULL,
+    base_rate REAL NOT NULL,
+    size_diff REAL NOT NULL DEFAULT 0,
+    net_rate REAL NOT NULL,
+    taxable_value REAL NOT NULL,
+    gst_rate REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
     amount REAL NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -155,13 +177,21 @@ const schemaStatements = [
   );`,
   `CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_no TEXT NOT NULL UNIQUE,
+    voucher_no TEXT NOT NULL UNIQUE,
+    invoice_no TEXT,
     customer_id INTEGER,
     warehouse_id INTEGER NOT NULL,
     sale_date TEXT NOT NULL,
+    batch_no TEXT,
+    expiry_date TEXT,
+    vehicle_no TEXT,
+    bilty_no TEXT,
+    broker TEXT,
+    remarks TEXT,
     status TEXT NOT NULL DEFAULT 'posted',
+    taxable_value REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
     total_amount REAL NOT NULL DEFAULT 0,
-    notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TEXT,
@@ -172,8 +202,15 @@ const schemaStatements = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sale_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
+    hsn TEXT,
+    pcs REAL,
     quantity REAL NOT NULL,
-    rate REAL NOT NULL,
+    base_rate REAL NOT NULL,
+    size_diff REAL NOT NULL DEFAULT 0,
+    net_rate REAL NOT NULL,
+    taxable_value REAL NOT NULL,
+    gst_rate REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
     amount REAL NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -181,13 +218,100 @@ const schemaStatements = [
     FOREIGN KEY (sale_id) REFERENCES sales(id),
     FOREIGN KEY (product_id) REFERENCES products(id)
   );`,
+  `CREATE TABLE IF NOT EXISTS sale_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    voucher_no TEXT NOT NULL UNIQUE,
+    invoice_no TEXT,
+    customer_id INTEGER,
+    warehouse_id INTEGER NOT NULL,
+    return_date TEXT NOT NULL,
+    batch_no TEXT,
+    expiry_date TEXT,
+    vehicle_no TEXT,
+    bilty_no TEXT,
+    broker TEXT,
+    remarks TEXT,
+    status TEXT NOT NULL DEFAULT 'posted',
+    taxable_value REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
+    total_amount REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT,
+    FOREIGN KEY (customer_id) REFERENCES parties(id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS sale_return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_return_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    hsn TEXT,
+    pcs REAL,
+    quantity REAL NOT NULL,
+    base_rate REAL NOT NULL,
+    size_diff REAL NOT NULL DEFAULT 0,
+    net_rate REAL NOT NULL,
+    taxable_value REAL NOT NULL,
+    gst_rate REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT,
+    FOREIGN KEY (sale_return_id) REFERENCES sale_returns(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS purchase_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    voucher_no TEXT NOT NULL UNIQUE,
+    invoice_no TEXT,
+    supplier_id INTEGER,
+    warehouse_id INTEGER NOT NULL,
+    return_date TEXT NOT NULL,
+    batch_no TEXT,
+    expiry_date TEXT,
+    vehicle_no TEXT,
+    bilty_no TEXT,
+    broker TEXT,
+    remarks TEXT,
+    status TEXT NOT NULL DEFAULT 'posted',
+    taxable_value REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
+    total_amount REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT,
+    FOREIGN KEY (supplier_id) REFERENCES parties(id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS purchase_return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_return_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    hsn TEXT,
+    pcs REAL,
+    quantity REAL NOT NULL,
+    base_rate REAL NOT NULL,
+    size_diff REAL NOT NULL DEFAULT 0,
+    net_rate REAL NOT NULL,
+    taxable_value REAL NOT NULL,
+    gst_rate REAL NOT NULL DEFAULT 0,
+    gst_amount REAL NOT NULL DEFAULT 0,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT,
+    FOREIGN KEY (purchase_return_id) REFERENCES purchase_returns(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+  );`,
   `CREATE TABLE IF NOT EXISTS production (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    reference_no TEXT NOT NULL UNIQUE,
+    voucher_no TEXT NOT NULL UNIQUE,
     warehouse_id INTEGER NOT NULL,
     production_date TEXT NOT NULL,
+    is_recurring INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'posted',
-    notes TEXT,
+    remarks TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TEXT,
@@ -197,8 +321,11 @@ const schemaStatements = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     production_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
-    quantity REAL NOT NULL,
-    direction TEXT NOT NULL CHECK (direction IN ('input', 'output')),
+    batch_no TEXT,
+    issued_qty REAL NOT NULL DEFAULT 0,
+    issued_pcs REAL NOT NULL DEFAULT 0,
+    production_qty REAL NOT NULL DEFAULT 0,
+    production_pcs REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TEXT,
@@ -276,6 +403,21 @@ function createDatabase() {
 }
 function initializeDatabase() {
   const db = createDatabase();
+  try {
+    const hasData = db.prepare(`SELECT COUNT(*) as c FROM purchases`).get().c > 0;
+    if (!hasData) {
+      db.exec(`DROP TABLE IF EXISTS purchase_items; DROP TABLE IF EXISTS purchases;`);
+    }
+    const hasProdData = db.prepare(`SELECT COUNT(*) as c FROM production`).get().c > 0;
+    if (!hasProdData) {
+      db.exec(`DROP TABLE IF EXISTS production_items; DROP TABLE IF EXISTS production;`);
+    }
+    const hasSaleData = db.prepare(`SELECT COUNT(*) as c FROM sales`).get().c > 0;
+    if (!hasSaleData) {
+      db.exec(`DROP TABLE IF EXISTS sale_items; DROP TABLE IF EXISTS sales;`);
+    }
+  } catch (e) {
+  }
   const migration = db.transaction(() => {
     for (const statement of schemaStatements) {
       db.prepare(statement).run();
@@ -285,6 +427,22 @@ function initializeDatabase() {
     }
   });
   migration();
+  const addColumn = (table, column, def) => {
+    const cols = db.pragma(`table_info(${table})`);
+    if (!cols.find((c) => c.name === column)) {
+      try {
+        db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`).run();
+      } catch (e) {
+      }
+    }
+  };
+  addColumn("parties", "mobile", "TEXT");
+  addColumn("parties", "city", "TEXT");
+  addColumn("parties", "district", "TEXT");
+  addColumn("parties", "state", "TEXT");
+  addColumn("parties", "pin_code", "TEXT");
+  addColumn("parties", "gstin", "TEXT");
+  addColumn("settings", "production_settings_json", 'TEXT DEFAULT "{}"');
   logger.info("database initialized", { dbPath: getDatabasePath() });
   return db;
 }
@@ -314,7 +472,22 @@ const IPC_CHANNELS = {
   REPORT_EXPORT: "stockops:report-export",
   BACKUP_CREATE: "stockops:backup-create",
   BACKUP_RESTORE: "stockops:backup-restore",
-  AUDIT_RECENT: "stockops:audit-recent"
+  AUDIT_RECENT: "stockops:audit-recent",
+  STOCK_ITEM_LEDGER: "stockops:stock-item-ledger",
+  REPORT_DAILY_SUMMARY: "stockops:report-daily-summary",
+  VOUCHER_PURCHASE_SAVE: "stockops:voucher-purchase-save",
+  VOUCHER_PURCHASE_GET_NEXT_NO: "stockops:voucher-purchase-get-next-no",
+  PARTY_GET_NEXT_CODE: "stockops:party-get-next-code",
+  VOUCHER_SALE_RETURN_SAVE: "stockops:voucher-sale-return-save",
+  VOUCHER_SALE_RETURN_GET_NEXT_NO: "stockops:voucher-sale-return-get-next-no",
+  VOUCHER_PRODUCTION_SAVE: "stockops:voucher-production-save",
+  VOUCHER_PRODUCTION_GET_NEXT_NO: "stockops:voucher-production-get-next-no",
+  PRODUCTION_SETTINGS_GET: "stockops:production-settings-get",
+  PRODUCTION_SETTINGS_UPDATE: "stockops:production-settings-update",
+  VOUCHER_SALE_SAVE: "stockops:voucher-sale-save",
+  VOUCHER_SALE_GET_NEXT_NO: "stockops:voucher-sale-get-next-no",
+  VOUCHER_PURCHASE_RETURN_SAVE: "stockops:voucher-purchase-return-save",
+  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no"
 };
 class AppError extends Error {
   constructor(message, code = "APP_ERROR", status = 400, details = null) {
@@ -523,13 +696,30 @@ const commonCreateSchema = zod.z.object({
 const commonUpdateSchema = commonCreateSchema.partial();
 const partyCreateSchema = zod.z.object({
   name: zod.z.string().min(1),
-  code: zod.z.string().min(1),
-  type: zod.z.enum(["customer", "supplier", "both"]),
+  code: zod.z.string().optional().nullable(),
+  type: zod.z.enum(["customer", "supplier", "both"]).default("customer"),
   phone: zod.z.string().optional().nullable(),
-  email: zod.z.string().email().optional().nullable(),
-  address: zod.z.string().optional().nullable()
+  mobile: zod.z.string().optional().nullable(),
+  email: zod.z.string().email().optional().nullable().or(zod.z.literal("")),
+  address: zod.z.string().optional().nullable(),
+  city: zod.z.string().optional().nullable(),
+  district: zod.z.string().optional().nullable(),
+  state: zod.z.string().optional().nullable(),
+  pin_code: zod.z.string().optional().nullable(),
+  gstin: zod.z.string().optional().nullable()
 });
 const partyUpdateSchema = partyCreateSchema.partial();
+class PartyService extends BaseCrudService {
+  getNextCode() {
+    return `PTY-${Date.now().toString().slice(-6)}`;
+  }
+  create(payload) {
+    if (!payload.code) {
+      payload.code = this.getNextCode();
+    }
+    return super.create(payload);
+  }
+}
 const warehouseCreateSchema = zod.z.object({
   name: zod.z.string().min(1),
   code: zod.z.string().min(1),
@@ -552,7 +742,7 @@ const productCreateSchema = zod.z.object({
 const productUpdateSchema = productCreateSchema.partial();
 const categoryService = new BaseCrudService(categoriesRepository, "Category", commonCreateSchema, commonUpdateSchema);
 const unitService = new BaseCrudService(unitsRepository, "Unit", commonCreateSchema, commonUpdateSchema);
-const partyService = new BaseCrudService(partiesRepository, "Party", partyCreateSchema, partyUpdateSchema);
+const partyService = new PartyService(partiesRepository, "Party", partyCreateSchema, partyUpdateSchema);
 const warehouseService = new BaseCrudService(warehousesRepository, "Warehouse", warehouseCreateSchema, warehouseUpdateSchema);
 const productService = new BaseCrudService(productsRepository, "Product", productCreateSchema, productUpdateSchema);
 const stockTransactionSchema = zod.z.object({
@@ -639,10 +829,10 @@ class InventoryService {
       lowStockItems
     };
   }
-  getRecentVouchers(limit = 10) {
+  getRecentVouchers(limit = 10, type = null) {
     const db = getDatabase();
-    return db.prepare(
-      `SELECT
+    let query = `
+      SELECT
         st.transaction_no AS voucher_no,
         st.transaction_type AS type,
         st.created_at AS date,
@@ -654,9 +844,104 @@ class InventoryService {
       LEFT JOIN parties pa ON pa.id = st.party_id
       LEFT JOIN products pr ON pr.id = st.product_id
       WHERE st.deleted_at IS NULL
-      ORDER BY st.id DESC
-      LIMIT :limit`
-    ).all({ limit });
+    `;
+    if (type) {
+      query += ` AND st.transaction_type = :type`;
+    }
+    query += ` ORDER BY st.id DESC LIMIT :limit`;
+    return db.prepare(query).all({ limit, type });
+  }
+  getItemLedger(productId) {
+    const db = getDatabase();
+    return db.prepare(
+      `SELECT
+        st.created_at AS date,
+        st.transaction_no AS voucher,
+        st.transaction_type AS type,
+        CASE WHEN st.quantity > 0 THEN st.quantity ELSE 0 END AS qty_in,
+        CASE WHEN st.quantity < 0 THEN ABS(st.quantity) ELSE 0 END AS qty_out,
+        SUM(st.quantity) OVER (ORDER BY st.id ASC) AS balance
+      FROM stock_transactions st
+      WHERE st.product_id = :productId AND st.deleted_at IS NULL
+      ORDER BY st.id ASC`
+    ).all({ productId });
+  }
+  getDailyStockSummary(filters = {}) {
+    const db = getDatabase();
+    const { fromDate, toDate, productId, categoryId } = filters;
+    let baseWhere = `p.deleted_at IS NULL AND p.is_active = 1`;
+    const params = {};
+    if (productId) {
+      baseWhere += ` AND p.id = :productId`;
+      params.productId = productId;
+    }
+    if (categoryId) {
+      baseWhere += ` AND p.category_id = :categoryId`;
+      params.categoryId = categoryId;
+    }
+    params.fromDate = fromDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
+    params.toDate = toDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const openingQuery = `
+      SELECT p.id as product_id, p.name as product_name, COALESCE(SUM(st.quantity), 0) as opening_balance
+      FROM products p
+      LEFT JOIN stock_transactions st ON st.product_id = p.id AND st.deleted_at IS NULL AND DATE(st.created_at) < :fromDate
+      WHERE ${baseWhere}
+      GROUP BY p.id
+    `;
+    const openingRows = db.prepare(openingQuery).all(params);
+    const openingMap = /* @__PURE__ */ new Map();
+    openingRows.forEach((row) => {
+      openingMap.set(row.product_id, {
+        product_name: row.product_name,
+        balance: row.opening_balance
+      });
+    });
+    const dailyQuery = `
+      SELECT 
+        DATE(st.created_at) as date,
+        p.id as product_id,
+        p.name as product_name,
+        SUM(CASE WHEN st.transaction_type = 'purchase' THEN st.quantity ELSE 0 END) as purchase,
+        SUM(CASE WHEN st.transaction_type = 'sale_return' THEN st.quantity ELSE 0 END) as sale_return,
+        SUM(CASE WHEN st.transaction_type = 'production_in' THEN st.quantity ELSE 0 END) as production_in,
+        SUM(CASE WHEN st.transaction_type = 'sale' THEN ABS(st.quantity) ELSE 0 END) as sale,
+        SUM(CASE WHEN st.transaction_type = 'purchase_return' THEN ABS(st.quantity) ELSE 0 END) as purchase_return,
+        SUM(CASE WHEN st.transaction_type = 'production_out' THEN ABS(st.quantity) ELSE 0 END) as production_out,
+        SUM(CASE WHEN st.quantity > 0 AND st.transaction_type NOT IN ('purchase', 'sale_return', 'production_in') THEN st.quantity ELSE 0 END) as other_in,
+        SUM(CASE WHEN st.quantity < 0 AND st.transaction_type NOT IN ('sale', 'purchase_return', 'production_out') THEN ABS(st.quantity) ELSE 0 END) as other_out
+      FROM stock_transactions st
+      JOIN products p ON p.id = st.product_id
+      WHERE ${baseWhere} AND st.deleted_at IS NULL AND DATE(st.created_at) >= :fromDate AND DATE(st.created_at) <= :toDate
+      GROUP BY DATE(st.created_at), p.id
+      ORDER BY DATE(st.created_at) ASC, p.name ASC
+    `;
+    const dailyRows = db.prepare(dailyQuery).all(params);
+    const result = [];
+    for (const row of dailyRows) {
+      const pid = row.product_id;
+      const current = openingMap.get(pid) || { product_name: row.product_name, balance: 0 };
+      const opening = current.balance;
+      const total_in = row.purchase + row.sale_return + row.production_in + row.other_in;
+      const total_out = row.sale + row.purchase_return + row.production_out + row.other_out;
+      const closing = opening + total_in - total_out;
+      result.push({
+        date: row.date,
+        product_id: pid,
+        item: row.product_name,
+        opening,
+        purchase: row.purchase,
+        sale_return: row.sale_return,
+        production_in: row.production_in,
+        total_in,
+        sale: row.sale,
+        purchase_return: row.purchase_return,
+        issue: row.production_out,
+        total_out,
+        closing
+      });
+      openingMap.set(pid, { product_name: row.product_name, balance: closing });
+    }
+    return result;
   }
 }
 class ReportService {
@@ -738,11 +1023,514 @@ class AuditService {
     return auditLogsRepository.recent(limit);
   }
 }
+const purchaseItemSchema = zod.z.object({
+  product_id: zod.z.coerce.number().int().positive(),
+  hsn: zod.z.string().optional().nullable(),
+  pcs: zod.z.coerce.number().optional().nullable(),
+  quantity: zod.z.coerce.number().positive(),
+  base_rate: zod.z.coerce.number().min(0),
+  size_diff: zod.z.coerce.number().default(0),
+  net_rate: zod.z.coerce.number().min(0),
+  taxable_value: zod.z.coerce.number().min(0),
+  gst_rate: zod.z.coerce.number().min(0).default(0),
+  gst_amount: zod.z.coerce.number().min(0).default(0),
+  amount: zod.z.coerce.number().min(0)
+});
+const purchaseVoucherSchema = zod.z.object({
+  voucher_no: zod.z.string().optional().nullable(),
+  invoice_no: zod.z.string().optional().nullable(),
+  supplier_id: zod.z.coerce.number().int().positive().optional().nullable(),
+  warehouse_id: zod.z.coerce.number().int().positive(),
+  purchase_date: zod.z.string().min(10),
+  // YYYY-MM-DD
+  batch_no: zod.z.string().optional().nullable(),
+  expiry_date: zod.z.string().optional().nullable(),
+  vehicle_no: zod.z.string().optional().nullable(),
+  bilty_no: zod.z.string().optional().nullable(),
+  broker: zod.z.string().optional().nullable(),
+  remarks: zod.z.string().optional().nullable(),
+  status: zod.z.enum(["posted", "draft"]).default("posted"),
+  taxable_value: zod.z.coerce.number().min(0),
+  gst_amount: zod.z.coerce.number().min(0),
+  total_amount: zod.z.coerce.number().min(0),
+  items: zod.z.array(purchaseItemSchema).min(1)
+});
+class VoucherService {
+  getNextPurchaseVoucherNo() {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT COUNT(*) as count FROM purchases`).get();
+    const count = Number(row?.count ?? 0) + 1;
+    return `PUR-${String(count).padStart(5, "0")}`;
+  }
+  savePurchaseVoucher(payload) {
+    const data = purchaseVoucherSchema.parse(payload);
+    const db = getDatabase();
+    if (!data.voucher_no) {
+      data.voucher_no = this.getNextPurchaseVoucherNo();
+    }
+    const transaction = db.transaction(() => {
+      const purchaseResult = db.prepare(
+        `INSERT INTO purchases (
+          voucher_no, invoice_no, supplier_id, warehouse_id, purchase_date,
+          batch_no, expiry_date, vehicle_no, bilty_no, broker, remarks,
+          status, taxable_value, gst_amount, total_amount
+        ) VALUES (
+          :voucher_no, :invoice_no, :supplier_id, :warehouse_id, :purchase_date,
+          :batch_no, :expiry_date, :vehicle_no, :bilty_no, :broker, :remarks,
+          :status, :taxable_value, :gst_amount, :total_amount
+        )`
+      ).run({
+        voucher_no: data.voucher_no,
+        invoice_no: data.invoice_no,
+        supplier_id: data.supplier_id,
+        warehouse_id: data.warehouse_id,
+        purchase_date: data.purchase_date,
+        batch_no: data.batch_no,
+        expiry_date: data.expiry_date,
+        vehicle_no: data.vehicle_no,
+        bilty_no: data.bilty_no,
+        broker: data.broker,
+        remarks: data.remarks,
+        status: data.status,
+        taxable_value: data.taxable_value,
+        gst_amount: data.gst_amount,
+        total_amount: data.total_amount
+      });
+      const purchaseId2 = purchaseResult.lastInsertRowid;
+      const insertItemStmt = db.prepare(
+        `INSERT INTO purchase_items (
+          purchase_id, product_id, hsn, pcs, quantity, base_rate, size_diff,
+          net_rate, taxable_value, gst_rate, gst_amount, amount
+        ) VALUES (
+          :purchase_id, :product_id, :hsn, :pcs, :quantity, :base_rate, :size_diff,
+          :net_rate, :taxable_value, :gst_rate, :gst_amount, :amount
+        )`
+      );
+      const insertStockStmt = db.prepare(
+        `INSERT INTO stock_transactions (
+          transaction_no, source_type, source_id, transaction_type,
+          product_id, warehouse_id, party_id, quantity, rate, amount,
+          reference_no, notes
+        ) VALUES (
+          :transaction_no, 'purchase', :source_id, 'purchase',
+          :product_id, :warehouse_id, :party_id, :quantity, :rate, :amount,
+          :reference_no, :notes
+        )`
+      );
+      for (const item of data.items) {
+        insertItemStmt.run({
+          purchase_id: purchaseId2,
+          product_id: item.product_id,
+          hsn: item.hsn,
+          pcs: item.pcs,
+          quantity: item.quantity,
+          base_rate: item.base_rate,
+          size_diff: item.size_diff,
+          net_rate: item.net_rate,
+          taxable_value: item.taxable_value,
+          gst_rate: item.gst_rate,
+          gst_amount: item.gst_amount,
+          amount: item.amount
+        });
+        insertStockStmt.run({
+          transaction_no: data.voucher_no,
+          // we use voucher_no to link them
+          source_id: purchaseId2,
+          product_id: item.product_id,
+          warehouse_id: data.warehouse_id,
+          party_id: data.supplier_id,
+          quantity: item.quantity,
+          rate: item.net_rate,
+          amount: item.taxable_value,
+          // storing taxable value as the inventory cost
+          reference_no: data.invoice_no,
+          notes: data.remarks
+        });
+      }
+      return purchaseId2;
+    });
+    const purchaseId = transaction();
+    return { id: purchaseId, voucher_no: data.voucher_no };
+  }
+  // --- SALES RETURN ---
+  getNextSaleReturnVoucherNo() {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT COUNT(*) as count FROM sale_returns`).get();
+    const count = Number(row?.count ?? 0) + 1;
+    return `SR-${String(count).padStart(5, "0")}`;
+  }
+  saveSaleReturnVoucher(payload) {
+    const db = getDatabase();
+    if (!payload.voucher_no) payload.voucher_no = this.getNextSaleReturnVoucherNo();
+    const transaction = db.transaction(() => {
+      const srResult = db.prepare(
+        `INSERT INTO sale_returns (
+          voucher_no, invoice_no, customer_id, warehouse_id, return_date,
+          batch_no, expiry_date, vehicle_no, bilty_no, broker, remarks,
+          status, taxable_value, gst_amount, total_amount
+        ) VALUES (
+          :voucher_no, :invoice_no, :customer_id, :warehouse_id, :return_date,
+          :batch_no, :expiry_date, :vehicle_no, :bilty_no, :broker, :remarks,
+          :status, :taxable_value, :gst_amount, :total_amount
+        )`
+      ).run({
+        voucher_no: payload.voucher_no,
+        invoice_no: payload.invoice_no,
+        customer_id: payload.customer_id,
+        warehouse_id: payload.warehouse_id || 1,
+        return_date: payload.return_date,
+        batch_no: payload.batch_no,
+        expiry_date: payload.expiry_date,
+        vehicle_no: payload.vehicle_no,
+        bilty_no: payload.bilty_no,
+        broker: payload.broker,
+        remarks: payload.remarks,
+        status: "posted",
+        taxable_value: payload.taxable_value,
+        gst_amount: payload.gst_amount,
+        total_amount: payload.total_amount
+      });
+      const srId2 = srResult.lastInsertRowid;
+      const insertItemStmt = db.prepare(
+        `INSERT INTO sale_return_items (
+          sale_return_id, product_id, hsn, pcs, quantity, base_rate, size_diff,
+          net_rate, taxable_value, gst_rate, gst_amount, amount
+        ) VALUES (
+          :sale_return_id, :product_id, :hsn, :pcs, :quantity, :base_rate, :size_diff,
+          :net_rate, :taxable_value, :gst_rate, :gst_amount, :amount
+        )`
+      );
+      const insertStockStmt = db.prepare(
+        `INSERT INTO stock_transactions (
+          transaction_no, source_type, source_id, transaction_type,
+          product_id, warehouse_id, party_id, quantity, rate, amount,
+          reference_no, notes
+        ) VALUES (
+          :transaction_no, 'sale_return', :source_id, 'sale_return',
+          :product_id, :warehouse_id, :party_id, :quantity, :rate, :amount,
+          :reference_no, :notes
+        )`
+      );
+      for (const item of payload.items) {
+        insertItemStmt.run({
+          sale_return_id: srId2,
+          product_id: item.product_id,
+          hsn: item.hsn,
+          pcs: item.pcs,
+          quantity: item.quantity,
+          base_rate: item.base_rate,
+          size_diff: item.size_diff,
+          net_rate: item.net_rate,
+          taxable_value: item.taxable_value,
+          gst_rate: item.gst_rate,
+          gst_amount: item.gst_amount,
+          amount: item.amount
+        });
+        insertStockStmt.run({
+          transaction_no: payload.voucher_no,
+          source_id: srId2,
+          product_id: item.product_id,
+          warehouse_id: payload.warehouse_id || 1,
+          party_id: payload.customer_id,
+          quantity: Number(item.quantity),
+          rate: Number(item.net_rate),
+          amount: Number(item.taxable_value),
+          reference_no: payload.invoice_no,
+          notes: payload.remarks
+        });
+      }
+      return srId2;
+    });
+    const srId = transaction();
+    return { id: srId, voucher_no: payload.voucher_no };
+  }
+  // --- SALES ---
+  getNextSaleVoucherNo() {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT COUNT(*) as count FROM sales`).get();
+    const count = Number(row?.count ?? 0) + 1;
+    return `SALE-${String(count).padStart(5, "0")}`;
+  }
+  saveSaleVoucher(payload) {
+    const db = getDatabase();
+    if (!payload.voucher_no) payload.voucher_no = this.getNextSaleVoucherNo();
+    const transaction = db.transaction(() => {
+      const saleResult = db.prepare(
+        `INSERT INTO sales (
+          voucher_no, invoice_no, customer_id, warehouse_id, sale_date,
+          batch_no, expiry_date, vehicle_no, bilty_no, broker, remarks,
+          status, taxable_value, gst_amount, total_amount
+        ) VALUES (
+          :voucher_no, :invoice_no, :customer_id, :warehouse_id, :sale_date,
+          :batch_no, :expiry_date, :vehicle_no, :bilty_no, :broker, :remarks,
+          :status, :taxable_value, :gst_amount, :total_amount
+        )`
+      ).run({
+        voucher_no: payload.voucher_no,
+        invoice_no: payload.invoice_no,
+        customer_id: payload.customer_id,
+        warehouse_id: payload.warehouse_id || 1,
+        sale_date: payload.sale_date,
+        batch_no: payload.batch_no,
+        expiry_date: payload.expiry_date,
+        vehicle_no: payload.vehicle_no,
+        bilty_no: payload.bilty_no,
+        broker: payload.broker,
+        remarks: payload.remarks,
+        status: "posted",
+        taxable_value: payload.taxable_value,
+        gst_amount: payload.gst_amount,
+        total_amount: payload.total_amount
+      });
+      const saleId2 = saleResult.lastInsertRowid;
+      const insertItemStmt = db.prepare(
+        `INSERT INTO sale_items (
+          sale_id, product_id, hsn, pcs, quantity, base_rate, size_diff,
+          net_rate, taxable_value, gst_rate, gst_amount, amount
+        ) VALUES (
+          :sale_id, :product_id, :hsn, :pcs, :quantity, :base_rate, :size_diff,
+          :net_rate, :taxable_value, :gst_rate, :gst_amount, :amount
+        )`
+      );
+      const insertStockStmt = db.prepare(
+        `INSERT INTO stock_transactions (
+          transaction_no, source_type, source_id, transaction_type,
+          product_id, warehouse_id, party_id, quantity, rate, amount,
+          reference_no, notes
+        ) VALUES (
+          :transaction_no, 'sale', :source_id, 'sale',
+          :product_id, :warehouse_id, :party_id, :quantity, :rate, :amount,
+          :reference_no, :notes
+        )`
+      );
+      for (const item of payload.items) {
+        insertItemStmt.run({
+          sale_id: saleId2,
+          product_id: item.product_id,
+          hsn: item.hsn,
+          pcs: item.pcs,
+          quantity: item.quantity,
+          base_rate: item.base_rate,
+          size_diff: item.size_diff,
+          net_rate: item.net_rate,
+          taxable_value: item.taxable_value,
+          gst_rate: item.gst_rate,
+          gst_amount: item.gst_amount,
+          amount: item.amount
+        });
+        insertStockStmt.run({
+          transaction_no: payload.voucher_no,
+          source_id: saleId2,
+          product_id: item.product_id,
+          warehouse_id: payload.warehouse_id || 1,
+          party_id: payload.customer_id,
+          quantity: -Math.abs(Number(item.quantity)),
+          rate: Number(item.net_rate),
+          amount: Number(item.taxable_value),
+          reference_no: payload.invoice_no,
+          notes: payload.remarks
+        });
+      }
+      return saleId2;
+    });
+    const saleId = transaction();
+    return { id: saleId, voucher_no: payload.voucher_no };
+  }
+  // --- PURCHASE RETURN ---
+  getNextPurchaseReturnVoucherNo() {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT COUNT(*) as count FROM purchase_returns`).get();
+    const count = Number(row?.count ?? 0) + 1;
+    return `PR-${String(count).padStart(5, "0")}`;
+  }
+  savePurchaseReturnVoucher(payload) {
+    const db = getDatabase();
+    if (!payload.voucher_no) payload.voucher_no = this.getNextPurchaseReturnVoucherNo();
+    const transaction = db.transaction(() => {
+      const prResult = db.prepare(
+        `INSERT INTO purchase_returns (
+          voucher_no, invoice_no, supplier_id, warehouse_id, return_date,
+          batch_no, expiry_date, vehicle_no, bilty_no, broker, remarks,
+          status, taxable_value, gst_amount, total_amount
+        ) VALUES (
+          :voucher_no, :invoice_no, :supplier_id, :warehouse_id, :return_date,
+          :batch_no, :expiry_date, :vehicle_no, :bilty_no, :broker, :remarks,
+          :status, :taxable_value, :gst_amount, :total_amount
+        )`
+      ).run({
+        voucher_no: payload.voucher_no,
+        invoice_no: payload.invoice_no,
+        supplier_id: payload.supplier_id,
+        warehouse_id: payload.warehouse_id || 1,
+        return_date: payload.return_date,
+        batch_no: payload.batch_no,
+        expiry_date: payload.expiry_date,
+        vehicle_no: payload.vehicle_no,
+        bilty_no: payload.bilty_no,
+        broker: payload.broker,
+        remarks: payload.remarks,
+        status: "posted",
+        taxable_value: payload.taxable_value,
+        gst_amount: payload.gst_amount,
+        total_amount: payload.total_amount
+      });
+      const prId2 = prResult.lastInsertRowid;
+      const insertItemStmt = db.prepare(
+        `INSERT INTO purchase_return_items (
+          purchase_return_id, product_id, hsn, pcs, quantity, base_rate, size_diff,
+          net_rate, taxable_value, gst_rate, gst_amount, amount
+        ) VALUES (
+          :purchase_return_id, :product_id, :hsn, :pcs, :quantity, :base_rate, :size_diff,
+          :net_rate, :taxable_value, :gst_rate, :gst_amount, :amount
+        )`
+      );
+      const insertStockStmt = db.prepare(
+        `INSERT INTO stock_transactions (
+          transaction_no, source_type, source_id, transaction_type,
+          product_id, warehouse_id, party_id, quantity, rate, amount,
+          reference_no, notes
+        ) VALUES (
+          :transaction_no, 'purchase_return', :source_id, 'purchase_return',
+          :product_id, :warehouse_id, :party_id, :quantity, :rate, :amount,
+          :reference_no, :notes
+        )`
+      );
+      for (const item of payload.items) {
+        insertItemStmt.run({
+          purchase_return_id: prId2,
+          product_id: item.product_id,
+          hsn: item.hsn,
+          pcs: item.pcs,
+          quantity: item.quantity,
+          base_rate: item.base_rate,
+          size_diff: item.size_diff,
+          net_rate: item.net_rate,
+          taxable_value: item.taxable_value,
+          gst_rate: item.gst_rate,
+          gst_amount: item.gst_amount,
+          amount: item.amount
+        });
+        insertStockStmt.run({
+          transaction_no: payload.voucher_no,
+          source_id: prId2,
+          product_id: item.product_id,
+          warehouse_id: payload.warehouse_id || 1,
+          party_id: payload.supplier_id,
+          quantity: -Math.abs(Number(item.quantity)),
+          rate: Number(item.net_rate),
+          amount: Number(item.taxable_value),
+          reference_no: payload.invoice_no,
+          notes: payload.remarks
+        });
+      }
+      return prId2;
+    });
+    const prId = transaction();
+    return { id: prId, voucher_no: payload.voucher_no };
+  }
+  // --- PRODUCTION ---
+  getNextProductionVoucherNo() {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT COUNT(*) as count FROM production`).get();
+    const count = Number(row?.count ?? 0) + 1;
+    return `PROD-${String(count).padStart(5, "0")}`;
+  }
+  saveProductionVoucher(payload) {
+    const db = getDatabase();
+    if (!payload.voucher_no) payload.voucher_no = this.getNextProductionVoucherNo();
+    const transaction = db.transaction(() => {
+      const prodResult = db.prepare(
+        `INSERT INTO production (
+          voucher_no, warehouse_id, production_date, is_recurring, status, remarks
+        ) VALUES (
+          :voucher_no, :warehouse_id, :production_date, :is_recurring, :status, :remarks
+        )`
+      ).run({
+        voucher_no: payload.voucher_no,
+        warehouse_id: payload.warehouse_id || 1,
+        production_date: payload.production_date,
+        is_recurring: payload.is_recurring ? 1 : 0,
+        status: "posted",
+        remarks: payload.remarks
+      });
+      const prodId2 = prodResult.lastInsertRowid;
+      const insertItemStmt = db.prepare(
+        `INSERT INTO production_items (
+          production_id, product_id, batch_no, issued_qty, issued_pcs,
+          production_qty, production_pcs
+        ) VALUES (
+          :production_id, :product_id, :batch_no, :issued_qty, :issued_pcs,
+          :production_qty, :production_pcs
+        )`
+      );
+      const insertStockStmt = db.prepare(
+        `INSERT INTO stock_transactions (
+          transaction_no, source_type, source_id, transaction_type,
+          product_id, warehouse_id, quantity, rate, amount, notes
+        ) VALUES (
+          :transaction_no, 'production', :source_id, :transaction_type,
+          :product_id, :warehouse_id, :quantity, 0, 0, :notes
+        )`
+      );
+      for (const item of payload.items) {
+        insertItemStmt.run({
+          production_id: prodId2,
+          product_id: item.product_id,
+          batch_no: item.batch_no,
+          issued_qty: item.issued_qty,
+          issued_pcs: item.issued_pcs,
+          production_qty: item.production_qty,
+          production_pcs: item.production_pcs
+        });
+        if (Number(item.issued_qty) > 0) {
+          insertStockStmt.run({
+            transaction_no: payload.voucher_no,
+            source_id: prodId2,
+            transaction_type: "production_out",
+            product_id: item.product_id,
+            warehouse_id: payload.warehouse_id || 1,
+            quantity: -Math.abs(Number(item.issued_qty)),
+            notes: payload.remarks
+          });
+        }
+        if (Number(item.production_qty) > 0) {
+          insertStockStmt.run({
+            transaction_no: payload.voucher_no,
+            source_id: prodId2,
+            transaction_type: "production_in",
+            product_id: item.product_id,
+            warehouse_id: payload.warehouse_id || 1,
+            quantity: Math.abs(Number(item.production_qty)),
+            notes: payload.remarks
+          });
+        }
+      }
+      return prodId2;
+    });
+    const prodId = transaction();
+    return { id: prodId, voucher_no: payload.voucher_no };
+  }
+  getProductionSettings() {
+    const db = getDatabase();
+    const row = db.prepare(`SELECT production_settings_json FROM settings WHERE id = 1`).get();
+    try {
+      return JSON.parse(row?.production_settings_json || "{}");
+    } catch {
+      return {};
+    }
+  }
+  updateProductionSettings(settingsJson) {
+    const db = getDatabase();
+    db.prepare(`UPDATE settings SET production_settings_json = ? WHERE id = 1`).run(JSON.stringify(settingsJson));
+    return settingsJson;
+  }
+}
 const authService = new AuthService();
 const inventoryService = new InventoryService();
 const reportService = new ReportService();
 const backupService = new BackupService();
 const auditService = new AuditService();
+const voucherService = new VoucherService();
 const servicesByEntity = {
   category: categoryService,
   unit: unitService,
@@ -773,7 +1561,22 @@ function registerIpcHandlers() {
   electron.ipcMain.handle(IPC_CHANNELS.STOCK_RECORD, async (_event, payload) => inventoryService.recordStockTransaction(payload));
   electron.ipcMain.handle(IPC_CHANNELS.STOCK_BALANCE, async (_event, { productId, warehouseId }) => inventoryService.getStockBalance(productId, warehouseId));
   electron.ipcMain.handle(IPC_CHANNELS.DASHBOARD_SUMMARY, async () => inventoryService.getDashboardSummary());
-  electron.ipcMain.handle(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, async (_event, { limit = 10 } = {}) => inventoryService.getRecentVouchers(limit));
+  electron.ipcMain.handle(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, async (_event, { limit = 10, type = null } = {}) => inventoryService.getRecentVouchers(limit, type));
+  electron.ipcMain.handle(IPC_CHANNELS.STOCK_ITEM_LEDGER, async (_event, productId) => inventoryService.getItemLedger(productId));
+  electron.ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_SUMMARY, async (_event, filters) => inventoryService.getDailyStockSummary(filters));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_SAVE, async (_event, payload) => voucherService.savePurchaseVoucher(payload));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_GET_NEXT_NO, async () => voucherService.getNextPurchaseVoucherNo());
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_SALE_RETURN_SAVE, async (_event, payload) => voucherService.saveSaleReturnVoucher(payload));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_SALE_RETURN_GET_NEXT_NO, async () => voucherService.getNextSaleReturnVoucherNo());
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PRODUCTION_SAVE, async (_event, payload) => voucherService.saveProductionVoucher(payload));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PRODUCTION_GET_NEXT_NO, async () => voucherService.getNextProductionVoucherNo());
+  electron.ipcMain.handle(IPC_CHANNELS.PRODUCTION_SETTINGS_GET, async () => voucherService.getProductionSettings());
+  electron.ipcMain.handle(IPC_CHANNELS.PRODUCTION_SETTINGS_UPDATE, async (_event, payload) => voucherService.updateProductionSettings(payload));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_SALE_SAVE, async (_event, payload) => voucherService.saveSaleVoucher(payload));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_SALE_GET_NEXT_NO, async () => voucherService.getNextSaleVoucherNo());
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_SAVE, async (_event, payload) => voucherService.savePurchaseReturnVoucher(payload));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO, async () => voucherService.getNextPurchaseReturnVoucherNo());
+  electron.ipcMain.handle(IPC_CHANNELS.PARTY_GET_NEXT_CODE, async () => partyService.getNextCode());
   electron.ipcMain.handle(IPC_CHANNELS.REPORT_EXPORT, async (_event, { format, rows, title }) => {
     if (format === "csv") {
       return reportService.exportCsv(rows);

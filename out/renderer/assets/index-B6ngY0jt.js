@@ -12998,7 +12998,8 @@ const schema = objectType({
   rate: coerce.number().min(0),
   notes: stringType().optional()
 });
-function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, sign = 1 }) {
+function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, sign = 1, transactionType }) {
+  const [recentVouchers, setRecentVouchers] = reactExports.useState([]);
   const [availableStock, setAvailableStock] = reactExports.useState(0);
   const [loadingStock, setLoadingStock] = reactExports.useState(false);
   const defaultValues2 = reactExports.useMemo(
@@ -13049,6 +13050,19 @@ function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, sign = 1
       active = false;
     };
   }, [selectedProduct?.id, sign]);
+  const loadRecentVouchers = async () => {
+    if (transactionType) {
+      try {
+        const history = await window.stockOps.getRecentVouchers(10, transactionType);
+        setRecentVouchers(history);
+      } catch (err) {
+        console.error("Failed to load recent vouchers", err);
+      }
+    }
+  };
+  reactExports.useEffect(() => {
+    loadRecentVouchers();
+  }, [transactionType]);
   const submit = async (values) => {
     const quantity = Number(values.quantity) * sign;
     if (sign < 0 && Number(values.quantity) > availableStock) {
@@ -13061,47 +13075,73 @@ function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, sign = 1
     clearErrors("quantity");
     await onSubmitVoucher({ ...values, quantity });
     reset(defaultValues2);
+    await loadRecentVouchers();
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: title }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "inline-form", onSubmit: handleSubmit(submit), children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-        "Product",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("select", { ...register("product_id"), children: products.map((product) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: product.id, children: [
-          product.name,
-          " (",
-          product.code,
-          ")"
-        ] }, product.id)) }),
-        errors.product_id ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.product_id.message }) : null
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "voucher-entry-view", style: { display: "grid", gap: "14px", minWidth: 0 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: title }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "inline-form", onSubmit: handleSubmit(submit), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Product",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("select", { ...register("product_id"), children: products.map((product) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: product.id, children: [
+            product.name,
+            " (",
+            product.code,
+            ")"
+          ] }, product.id)) }),
+          errors.product_id ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.product_id.message }) : null
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Party",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("select", { ...register("party_id"), children: parties.map((party) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: party.id, children: party.name }, party.id)) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Quantity",
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "number",
+              step: "0.001",
+              max: sign < 0 ? availableStock : void 0,
+              ...register("quantity")
+            }
+          ),
+          sign < 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "stock-hint", children: loadingStock ? "Loading available stock..." : `Available stock: ${Number(availableStock).toFixed(3)}${selectedProduct ? ` for ${selectedProduct.name}` : ""}` }) : null,
+          errors.quantity ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.quantity.message }) : null
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Rate",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.01", ...register("rate") })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Notes",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("notes") })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", children: "Post Voucher" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { marginTop: "14px" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { children: [
+        "Recent ",
+        title,
+        "s"
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-        "Party",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("select", { ...register("party_id"), children: parties.map((party) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: party.id, children: party.name }, party.id)) })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-        "Quantity",
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            type: "number",
-            step: "0.001",
-            max: sign < 0 ? availableStock : void 0,
-            ...register("quantity")
-          }
-        ),
-        sign < 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "stock-hint", children: loadingStock ? "Loading available stock..." : `Available stock: ${Number(availableStock).toFixed(3)}${selectedProduct ? ` for ${selectedProduct.name}` : ""}` }) : null,
-        errors.quantity ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.quantity.message }) : null
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-        "Rate",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.01", ...register("rate") })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-        "Notes",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("notes") })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", children: "Post Voucher" })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Voucher No" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Date" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Item" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Party" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Qty / Total" })
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: recentVouchers.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 5, children: "No recent vouchers found." }) }) : recentVouchers.map((voucher) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.voucher_no }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(voucher.date).toLocaleString() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.item || "-" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.party }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: Number(voucher.total).toFixed(2) })
+        ] }, voucher.voucher_no)) })
+      ] })
     ] })
   ] });
 }
@@ -13330,6 +13370,219 @@ function StockMasterPanel({ products, categories, units, onCreate, onUpdate, onD
         ] }) })
       ] }, row.id)) })
     ] }) })
+  ] });
+}
+function ItemLedgerPanel({ products }) {
+  const [selectedProductId, setSelectedProductId] = reactExports.useState("");
+  const [ledger, setLedger] = reactExports.useState([]);
+  const [loading, setLoading] = reactExports.useState(false);
+  const [error, setError] = reactExports.useState(null);
+  const selectedProduct = products.find((p) => String(p.id) === String(selectedProductId));
+  reactExports.useEffect(() => {
+    if (!selectedProductId) {
+      setLedger([]);
+      return;
+    }
+    let active = true;
+    const fetchLedger = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await window.stockOps.getItemLedger(selectedProductId);
+        if (active) {
+          setLedger(data || []);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err.message || "Failed to fetch ledger");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    fetchLedger();
+    return () => {
+      active = false;
+    };
+  }, [selectedProductId]);
+  const currentBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "ledger-view", style: { display: "grid", gap: "14px", minWidth: 0 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "Item Stock Ledger" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-form", style: { gridTemplateColumns: "1fr", maxWidth: "400px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+        "Select Item",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "select",
+          {
+            value: selectedProductId,
+            onChange: (e) => setSelectedProductId(e.target.value),
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "-- Choose an Item --" }),
+              products.map((product) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: product.id, children: [
+                product.name,
+                " (",
+                product.code,
+                ")"
+              ] }, product.id))
+            ]
+          }
+        )
+      ] }) })
+    ] }),
+    selectedProduct && /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { marginBottom: 0 }, children: selectedProduct.name }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "stock-hint", style: { marginTop: "4px" }, children: [
+            "Code: ",
+            selectedProduct.code
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "stock-hint", style: { margin: 0 }, children: "Current Balance" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { style: { margin: "4px 0 0", fontSize: "32px", color: "var(--title)" }, children: Number(currentBalance).toFixed(3) })
+        ] })
+      ] }),
+      loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Loading ledger..." }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: error }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Date" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Voucher" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Type" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "In" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Out" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Balance" })
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: ledger.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 6, children: "No transactions found for this item." }) }) : ledger.map((row, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(row.date).toLocaleString() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.voucher }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.type }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { color: row.qty_in > 0 ? "var(--good)" : "inherit" }, children: row.qty_in > 0 ? Number(row.qty_in).toFixed(3) : "-" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { color: row.qty_out > 0 ? "var(--bad)" : "inherit" }, children: row.qty_out > 0 ? Number(row.qty_out).toFixed(3) : "-" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { fontWeight: 600 }, children: Number(row.balance).toFixed(3) })
+        ] }, idx)) })
+      ] })
+    ] })
+  ] });
+}
+function DailyStockSummaryPanel({ products, categories }) {
+  const [fromDate, setFromDate] = reactExports.useState(
+    new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10)
+  );
+  const [toDate, setToDate] = reactExports.useState((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+  const [selectedProductId, setSelectedProductId] = reactExports.useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = reactExports.useState("");
+  const [summary, setSummary] = reactExports.useState([]);
+  const [loading, setLoading] = reactExports.useState(false);
+  const [error, setError] = reactExports.useState(null);
+  const fetchSummary = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await window.stockOps.getDailyStockSummary({
+        fromDate,
+        toDate,
+        productId: selectedProductId ? Number(selectedProductId) : null,
+        categoryId: selectedCategoryId ? Number(selectedCategoryId) : null
+      });
+      setSummary(data || []);
+    } catch (err) {
+      setError(err.message || "Failed to fetch daily summary");
+    } finally {
+      setLoading(false);
+    }
+  };
+  reactExports.useEffect(() => {
+    fetchSummary();
+  }, [fromDate, toDate, selectedProductId, selectedCategoryId]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "daily-summary-view", style: { display: "grid", gap: "14px", minWidth: 0 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { marginBottom: "4px" }, children: "Daily Stock Summary" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "stock-hint", style: { marginBottom: "16px" }, children: "Auto-generated day-wise stock position per item." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "inline-form", style: { gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "From",
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "date",
+              value: fromDate,
+              onChange: (e) => setFromDate(e.target.value)
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "To",
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "date",
+              value: toDate,
+              onChange: (e) => setToDate(e.target.value)
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { gridColumn: "span 2" }, children: [
+          "Item",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "select",
+            {
+              value: selectedProductId,
+              onChange: (e) => setSelectedProductId(e.target.value),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "All Items" }),
+                products.map((product) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: product.id, children: product.name }, product.id))
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Category",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "select",
+            {
+              value: selectedCategoryId,
+              onChange: (e) => setSelectedCategoryId(e.target.value),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "All" }),
+                categories?.map((cat) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: cat.id, children: cat.name }, cat.id))
+              ]
+            }
+          )
+        ] })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", children: loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Loading summary..." }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: error }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowX: "auto" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { style: { minWidth: "900px" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "DATE" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "ITEM" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "OPENING" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "PURCHASE" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "SALE RETURN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "PRODUCTION" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { color: "var(--good)" }, children: "TOTAL IN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "SALE" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "PURCH. RETURN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "ISSUE" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { color: "var(--bad)" }, children: "TOTAL OUT" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "CLOSING" })
+      ] }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: summary.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 12, children: "No stock movements found for the selected period." }) }) : summary.map((row, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.date }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { fontWeight: 600 }, children: row.item }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: Number(row.opening).toFixed(3) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.purchase > 0 ? Number(row.purchase).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.sale_return > 0 ? Number(row.sale_return).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.production_in > 0 ? Number(row.production_in).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { color: "var(--good)", fontWeight: 600 }, children: row.total_in > 0 ? Number(row.total_in).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.sale > 0 ? Number(row.sale).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.purchase_return > 0 ? Number(row.purchase_return).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.issue > 0 ? Number(row.issue).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { color: "var(--bad)", fontWeight: 600 }, children: row.total_out > 0 ? Number(row.total_out).toFixed(3) : "-" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { fontWeight: 700 }, children: Number(row.closing).toFixed(3) })
+      ] }, `${row.product_id}-${row.date}-${idx}`)) })
+    ] }) }) })
   ] });
 }
 function App() {
@@ -13561,7 +13814,8 @@ function App() {
           products,
           parties,
           onSubmitVoucher: (values) => postVoucher("purchase", values),
-          sign: 1
+          sign: 1,
+          transactionType: "purchase"
         }
       );
     }
@@ -13573,7 +13827,8 @@ function App() {
           products,
           parties,
           onSubmitVoucher: (values) => postVoucher("sale", values),
-          sign: -1
+          sign: -1,
+          transactionType: "sale"
         }
       );
     }
@@ -13585,7 +13840,8 @@ function App() {
           products,
           parties,
           onSubmitVoucher: (values) => postVoucher("sale_return", values),
-          sign: 1
+          sign: 1,
+          transactionType: "sale_return"
         }
       );
     }
@@ -13597,7 +13853,8 @@ function App() {
           products,
           parties,
           onSubmitVoucher: (values) => postVoucher("purchase_return", values),
-          sign: -1
+          sign: -1,
+          transactionType: "purchase_return"
         }
       );
     }
@@ -13609,7 +13866,8 @@ function App() {
           products,
           parties,
           onSubmitVoucher: (values) => postVoucher("production_in", values),
-          sign: 1
+          sign: 1,
+          transactionType: "production_in"
         }
       );
     }
@@ -13621,9 +13879,16 @@ function App() {
           products,
           parties,
           onSubmitVoucher: (values) => postVoucher("production_out", values),
-          sign: -1
+          sign: -1,
+          transactionType: "production_out"
         }
       );
+    }
+    if (activeView === "item-stock-ledger") {
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(ItemLedgerPanel, { products });
+    }
+    if (activeView === "daily-stock-summary") {
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(DailyStockSummaryPanel, { products, categories });
     }
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: VIEW_LABELS[activeView] }),

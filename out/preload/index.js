@@ -17,7 +17,22 @@ const IPC_CHANNELS = {
   REPORT_EXPORT: "stockops:report-export",
   BACKUP_CREATE: "stockops:backup-create",
   BACKUP_RESTORE: "stockops:backup-restore",
-  AUDIT_RECENT: "stockops:audit-recent"
+  AUDIT_RECENT: "stockops:audit-recent",
+  STOCK_ITEM_LEDGER: "stockops:stock-item-ledger",
+  REPORT_DAILY_SUMMARY: "stockops:report-daily-summary",
+  VOUCHER_PURCHASE_SAVE: "stockops:voucher-purchase-save",
+  VOUCHER_PURCHASE_GET_NEXT_NO: "stockops:voucher-purchase-get-next-no",
+  PARTY_GET_NEXT_CODE: "stockops:party-get-next-code",
+  VOUCHER_SALE_RETURN_SAVE: "stockops:voucher-sale-return-save",
+  VOUCHER_SALE_RETURN_GET_NEXT_NO: "stockops:voucher-sale-return-get-next-no",
+  VOUCHER_PRODUCTION_SAVE: "stockops:voucher-production-save",
+  VOUCHER_PRODUCTION_GET_NEXT_NO: "stockops:voucher-production-get-next-no",
+  PRODUCTION_SETTINGS_GET: "stockops:production-settings-get",
+  PRODUCTION_SETTINGS_UPDATE: "stockops:production-settings-update",
+  VOUCHER_SALE_SAVE: "stockops:voucher-sale-save",
+  VOUCHER_SALE_GET_NEXT_NO: "stockops:voucher-sale-get-next-no",
+  VOUCHER_PURCHASE_RETURN_SAVE: "stockops:voucher-purchase-return-save",
+  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no"
 };
 const api = {
   getAppInfo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.APP_INFO),
@@ -32,10 +47,25 @@ const api = {
   recordStockTransaction: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECORD, payload),
   getStockBalance: (productId, warehouseId) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_BALANCE, { productId, warehouseId }),
   getDashboardSummary: () => electron.ipcRenderer.invoke(IPC_CHANNELS.DASHBOARD_SUMMARY),
-  getRecentVouchers: (limit = 10) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, { limit }),
+  getRecentVouchers: (limit = 10, type = null) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, { limit, type }),
+  getItemLedger: (productId) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_ITEM_LEDGER, productId),
+  getDailyStockSummary: (filters) => electron.ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_SUMMARY, filters),
   exportReport: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.REPORT_EXPORT, payload),
   createBackup: () => electron.ipcRenderer.invoke(IPC_CHANNELS.BACKUP_CREATE),
   restoreBackup: (backupPath) => electron.ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RESTORE, backupPath),
-  getAuditLogs: (limit) => electron.ipcRenderer.invoke(IPC_CHANNELS.AUDIT_RECENT, limit)
+  getAuditLogs: (limit) => electron.ipcRenderer.invoke(IPC_CHANNELS.AUDIT_RECENT, limit),
+  savePurchaseVoucher: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_SAVE, payload),
+  getNextPurchaseVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_GET_NEXT_NO),
+  saveSaleReturnVoucher: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_RETURN_SAVE, payload),
+  getNextSaleReturnVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_RETURN_GET_NEXT_NO),
+  saveProductionVoucher: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PRODUCTION_SAVE, payload),
+  getNextProductionVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PRODUCTION_GET_NEXT_NO),
+  getProductionSettings: () => electron.ipcRenderer.invoke(IPC_CHANNELS.PRODUCTION_SETTINGS_GET),
+  updateProductionSettings: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.PRODUCTION_SETTINGS_UPDATE, payload),
+  saveSaleVoucher: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_SAVE, payload),
+  getNextSaleVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_GET_NEXT_NO),
+  savePurchaseReturnVoucher: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_SAVE, payload),
+  getNextPurchaseReturnVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO),
+  getNextPartyCode: () => electron.ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE)
 };
 electron.contextBridge.exposeInMainWorld("stockOps", api);

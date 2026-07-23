@@ -87,12 +87,34 @@ body {
 }
 
 .field span {
-  color: #eaf1ff;
-  font-weight: 600;
+  color: #2d4670;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
+  border: 1px solid #ced7e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #334b71;
+  padding: 10px 11px;
+  font-size: 14px;
+}
+
+.field small {
+  color: #cc3131;
+}
+
+.auth-form .field span {
+  color: #eaf1ff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.auth-form .field input,
+.auth-form .field select {
   border: 1px solid #1a3868;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
@@ -100,7 +122,7 @@ body {
   padding: 12px 14px;
 }
 
-.field small {
+.auth-form .field small {
   color: #ff6f6f;
 }
 
@@ -130,6 +152,7 @@ button:disabled {
   min-height: 0;
   display: grid;
   grid-template-columns: clamp(230px, 20vw, 270px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--page-bg);
   overflow: hidden;
 }
@@ -320,8 +343,8 @@ th {
 
 .inline-form {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
   align-items: end;
 }
 
@@ -475,6 +498,7 @@ th {
 @media (max-width: 1200px) {
   .erp-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .sidebar {

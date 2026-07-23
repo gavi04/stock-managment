@@ -15,5 +15,20 @@ export const IPC_CHANNELS = {
   REPORT_EXPORT: 'stockops:report-export',
   BACKUP_CREATE: 'stockops:backup-create',
   BACKUP_RESTORE: 'stockops:backup-restore',
-  AUDIT_RECENT: 'stockops:audit-recent'
+  AUDIT_RECENT: 'stockops:audit-recent',
+  STOCK_ITEM_LEDGER: 'stockops:stock-item-ledger',
+  REPORT_DAILY_SUMMARY: 'stockops:report-daily-summary',
+  VOUCHER_PURCHASE_SAVE: 'stockops:voucher-purchase-save',
+  VOUCHER_PURCHASE_GET_NEXT_NO: 'stockops:voucher-purchase-get-next-no',
+  PARTY_GET_NEXT_CODE: 'stockops:party-get-next-code',
+  VOUCHER_SALE_RETURN_SAVE: 'stockops:voucher-sale-return-save',
+  VOUCHER_SALE_RETURN_GET_NEXT_NO: 'stockops:voucher-sale-return-get-next-no',
+  VOUCHER_PRODUCTION_SAVE: 'stockops:voucher-production-save',
+  VOUCHER_PRODUCTION_GET_NEXT_NO: 'stockops:voucher-production-get-next-no',
+  PRODUCTION_SETTINGS_GET: 'stockops:production-settings-get',
+  PRODUCTION_SETTINGS_UPDATE: 'stockops:production-settings-update',
+  VOUCHER_SALE_SAVE: 'stockops:voucher-sale-save',
+  VOUCHER_SALE_GET_NEXT_NO: 'stockops:voucher-sale-get-next-no',
+  VOUCHER_PURCHASE_RETURN_SAVE: 'stockops:voucher-purchase-return-save',
+  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: 'stockops:voucher-purchase-return-get-next-no'
 };
