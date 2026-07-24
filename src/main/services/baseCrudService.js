@@ -13,8 +13,8 @@ export class BaseCrudService {
     return this.repository.findPage(filters);
   }
 
-  get(id) {
-    const entity = this.repository.findById(id);
+  async get(id) {
+    const entity = await this.repository.findById(id);
     if (!entity) {
       throw new AppError(`${this.entityName} not found`, 'ENTITY_NOT_FOUND', 404);
     }
@@ -24,12 +24,12 @@ export class BaseCrudService {
 
   create(payload) {
     const data = validate(this.createSchema, payload);
-    return this.repository.create(Object.keys(data), data);
+    return this.repository.create(data);
   }
 
-  update(id, payload) {
+  async update(id, payload) {
     const data = validate(this.updateSchema, payload);
-    const updated = this.repository.update(id, Object.keys(data), data);
+    const updated = await this.repository.update(id, data);
     if (!updated) {
       throw new AppError(`${this.entityName} not found`, 'ENTITY_NOT_FOUND', 404);
     }

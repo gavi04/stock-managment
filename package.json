@@ -15,12 +15,16 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
+    "@prisma/adapter-better-sqlite3": "^7.9.0",
+    "@prisma/client": "^7.9.0",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^12.6.0",
     "csv-stringify": "^6.6.0",
+    "dotenv": "^17.4.2",
     "electron-store": "^10.0.0",
     "exceljs": "^4.4.0",
     "pdfkit": "^0.17.1",
+    "prisma": "^7.9.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.56.4",
@@ -44,16 +48,21 @@
     },
     "files": [
       "out/**",
+      "prisma/migrations/**",
       "package.json"
     ],
     "mac": {
       "category": "public.app-category.business"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "linux": {
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     }
   }
 }

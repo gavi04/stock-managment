@@ -183,7 +183,7 @@ export function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
             <span>Customer</span>
             <select value={customerId} onChange={e => setCustomerId(e.target.value)} autoFocus>
               <option value="">-- Select Customer --</option>
-              {parties.filter(p => p.type === 'customer' || p.type === 'both').map(p => (
+              {parties.map(p => (
                 <option key={p.id} value={p.id}>{p.name} {p.gstin ? `| GST: ${p.gstin}` : ''}</option>
               ))}
             </select>

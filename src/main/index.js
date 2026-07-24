@@ -48,8 +48,8 @@ function createMainWindow() {
 
 configureSessionPaths();
 
-app.whenReady().then(() => {
-  initializeDatabase();
+app.whenReady().then(async () => {
+  await initializeDatabase();
   registerIpcHandlers();
   createMainWindow();
 
@@ -58,12 +58,13 @@ app.whenReady().then(() => {
       createMainWindow();
     }
   });
+}).catch((error) => {
+  logger.error('startup failed', { message: error.message, stack: error.stack });
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    closeDatabase();
-    app.quit();
+    closeDatabase().finally(() => app.quit());
   }
 });
 
@@ -72,5 +73,5 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason) => {
-  logger.error('unhandled rejection', { reason });
+  logger.error('unhandled rejection', { message: reason?.message, stack: reason?.stack, reason });
 });

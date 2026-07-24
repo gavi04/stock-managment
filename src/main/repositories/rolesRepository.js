@@ -1,12 +1,13 @@
 import { BaseRepository } from './baseRepository.js';
-import { getAll } from '../db/queryRunner.js';
+import { toWire } from '../utils/caseMapper.js';
 
 export class RolesRepository extends BaseRepository {
   constructor() {
-    super('roles');
+    super('role');
   }
 
-  findByCode(code) {
-    return getAll('SELECT * FROM roles WHERE code = :code AND deleted_at IS NULL', { code })[0] ?? null;
+  async findByCode(code) {
+    const row = await this.model.findFirst({ where: { code, deletedAt: null } });
+    return toWire(row);
   }
 }

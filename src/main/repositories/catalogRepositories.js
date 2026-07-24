@@ -1,7 +1,8 @@
 import { LookupRepository } from './lookupRepository.js';
 
-export const categoriesRepository = new LookupRepository('categories');
-export const unitsRepository = new LookupRepository('units');
-export const warehousesRepository = new LookupRepository('warehouses');
-export const partiesRepository = new LookupRepository('parties');
-export const productsRepository = new LookupRepository('products');
+export const categoriesRepository = new LookupRepository('category');
+export const unitsRepository = new LookupRepository('unit');
+export const warehousesRepository = new LookupRepository('warehouse');
+export const partiesRepository = new LookupRepository('party');
+export const productsRepository = new LookupRepository('product');
+export const hsnRepository = new LookupRepository('hsn', ['code', 'description']);

@@ -1,22 +1,24 @@
-import { getOne, runQuery } from '../db/queryRunner.js';
+import { getPrismaClient } from '../db/database.js';
+import { fromWire, toWire } from '../utils/caseMapper.js';
 
 export class SettingsRepository {
-  get() {
-    return getOne('SELECT * FROM settings WHERE id = 1');
+  async get() {
+    const row = await getPrismaClient().setting.findUnique({ where: { id: 1 } });
+    return toWire(row);
   }
 
-  update(payload) {
-    runQuery(
-      `UPDATE settings
-       SET company_name = :company_name,
-           allow_duplicate_barcodes = :allow_duplicate_barcodes,
-           allow_negative_stock = :allow_negative_stock,
-           enable_auto_backup = :enable_auto_backup,
-           backup_interval_hours = :backup_interval_hours,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = 1`,
-      payload
-    );
+  async update(payload) {
+    const data = fromWire(payload);
+    await getPrismaClient().setting.update({
+      where: { id: 1 },
+      data: {
+        companyName: data.companyName,
+        allowDuplicateBarcodes: data.allowDuplicateBarcodes,
+        allowNegativeStock: data.allowNegativeStock,
+        enableAutoBackup: data.enableAutoBackup,
+        backupIntervalHours: data.backupIntervalHours
+      }
+    });
     return this.get();
   }
 }

@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { AuthService } from '../services/authService.js';
-import { categoryService, partyService, productService, unitService, warehouseService } from '../services/lookupServices.js';
+import { categoryService, hsnService, partyService, productService, unitService, warehouseService } from '../services/lookupServices.js';
 import { InventoryService } from '../services/inventoryService.js';
 import { ReportService } from '../reports/reportService.js';
 import { BackupService } from '../backup/backupService.js';
@@ -18,6 +18,7 @@ const voucherService = new VoucherService();
 const servicesByEntity = {
   category: categoryService,
   unit: unitService,
+  hsn: hsnService,
   party: partyService,
   warehouse: warehouseService,
   product: productService
@@ -25,7 +26,7 @@ const servicesByEntity = {
 
 export function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.APP_INFO, () => ({ name: 'StockOps', version: '1.0.0' }));
-  ipcMain.handle(IPC_CHANNELS.AUTH_BOOTSTRAP_STATUS, async () => ({ needsBootstrap: authService.needsBootstrap() }));
+  ipcMain.handle(IPC_CHANNELS.AUTH_BOOTSTRAP_STATUS, async () => ({ needsBootstrap: await authService.needsBootstrap() }));
 
   ipcMain.handle(IPC_CHANNELS.AUTH_LOGIN, async (_event, payload) => authService.login(payload));
   ipcMain.handle(IPC_CHANNELS.AUTH_CREATE_USER, async (_event, payload) => authService.createUser(payload));

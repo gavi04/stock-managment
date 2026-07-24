@@ -1,0 +1,477 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum StockTransactionType {
+  purchase
+  sale
+  sale_return
+  purchase_return
+  production_in
+  production_out
+  adjustment_in
+  adjustment_out
+  transfer_in
+  transfer_out
+  opening_balance
+}
+
+model Role {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique
+  code            String    @unique
+  permissionsJson String    @default("[]") @map("permissions_json")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  fullName     String    @map("full_name")
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  roleId       Int       @map("role_id")
+  status       String    @default("active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  role      Role       @relation(fields: [roleId], references: [id])
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Setting {
+  id                     Int      @id
+  companyName            String   @default("StockOps") @map("company_name")
+  allowDuplicateBarcodes Boolean  @default(false) @map("allow_duplicate_barcodes")
+  allowNegativeStock     Boolean  @default(false) @map("allow_negative_stock")
+  enableAutoBackup       Boolean  @default(true) @map("enable_auto_backup")
+  backupIntervalHours    Int      @default(24) @map("backup_interval_hours")
+  productionSettingsJson String   @default("{}") @map("production_settings_json")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  code        String    @unique
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Unit {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  code      String    @unique
+  symbol    String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  products Product[]
+
+  @@map("units")
+}
+
+model Hsn {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@map("hsn_codes")
+}
+
+model Warehouse {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  code      String    @unique
+  location  String?
+  isDefault Boolean   @default(false) @map("is_default")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  purchases        Purchase[]
+  sales            Sale[]
+  saleReturns      SaleReturn[]
+  purchaseReturns  PurchaseReturn[]
+  productions      Production[]
+  stockTransactions StockTransaction[]
+
+  @@map("warehouses")
+}
+
+model Party {
+  id        Int       @id @default(autoincrement())
+  name      String
+  code      String    @unique
+  mobile    String?
+  address   String?
+  city      String?
+  district  String?
+  state     String?
+  pinCode   String?   @map("pin_code")
+  gstin     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  purchasesAsSupplier       Purchase[]        @relation("PurchaseSupplier")
+  salesAsCustomer           Sale[]            @relation("SaleCustomer")
+  saleReturnsAsCustomer     SaleReturn[]      @relation("SaleReturnCustomer")
+  purchaseReturnsAsSupplier PurchaseReturn[]  @relation("PurchaseReturnSupplier")
+  stockTransactions         StockTransaction[]
+
+  @@map("parties")
+}
+
+model Product {
+  id               Int       @id @default(autoincrement())
+  categoryId       Int?      @map("category_id")
+  unitId           Int?      @map("unit_id")
+  name             String
+  code             String    @unique
+  hsn              String?
+  size             String?
+  length           String?
+  gstRate          Float     @default(0) @map("gst_rate")
+  saleRate         Float     @default(0) @map("sale_rate")
+  purchaseRate     Float     @default(0) @map("purchase_rate")
+  sizeDiff         Float     @default(0) @map("size_diff")
+  batchNo          String?   @map("batch_no")
+  description      String?
+  openingStockDate String?   @map("opening_stock_date")
+  unitBasis        String    @default("quantity") @map("unit_basis")
+  isiMark          Boolean   @default(false) @map("isi_mark")
+  isActive         Boolean   @default(true) @map("is_active")
+  minStock         Float     @default(0) @map("min_stock")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  category              Category?             @relation(fields: [categoryId], references: [id])
+  unit                  Unit?                 @relation(fields: [unitId], references: [id])
+  purchaseItems         PurchaseItem[]
+  saleItems             SaleItem[]
+  saleReturnItems       SaleReturnItem[]
+  purchaseReturnItems   PurchaseReturnItem[]
+  productionItems       ProductionItem[]
+  stockTransactions     StockTransaction[]
+
+  @@index([code], map: "idx_products_code")
+  @@map("products")
+}
+
+model Purchase {
+  id           Int       @id @default(autoincrement())
+  voucherNo    String    @unique @map("voucher_no")
+  invoiceNo    String?   @map("invoice_no")
+  supplierId   Int?      @map("supplier_id")
+  warehouseId  Int       @map("warehouse_id")
+  purchaseDate String    @map("purchase_date")
+  batchNo      String?   @map("batch_no")
+  expiryDate   String?   @map("expiry_date")
+  vehicleNo    String?   @map("vehicle_no")
+  biltyNo      String?   @map("bilty_no")
+  broker       String?
+  remarks      String?
+  status       String    @default("posted")
+  taxableValue Float     @default(0) @map("taxable_value")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  totalAmount  Float     @default(0) @map("total_amount")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  supplier  Party?         @relation("PurchaseSupplier", fields: [supplierId], references: [id])
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id])
+  items     PurchaseItem[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id           Int       @id @default(autoincrement())
+  purchaseId   Int       @map("purchase_id")
+  productId    Int       @map("product_id")
+  productName  String?   @map("product_name")
+  hsn          String?
+  pcs          Float?
+  quantity     Float     @default(0)
+  baseRate     Float     @map("base_rate")
+  sizeDiff     Float     @default(0) @map("size_diff")
+  netRate      Float     @map("net_rate")
+  taxableValue Float     @map("taxable_value")
+  gstRate      Float     @default(0) @map("gst_rate")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  amount       Float
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@map("purchase_items")
+}
+
+model Sale {
+  id           Int       @id @default(autoincrement())
+  voucherNo    String    @unique @map("voucher_no")
+  invoiceNo    String?   @map("invoice_no")
+  customerId   Int?      @map("customer_id")
+  warehouseId  Int       @map("warehouse_id")
+  saleDate     String    @map("sale_date")
+  batchNo      String?   @map("batch_no")
+  expiryDate   String?   @map("expiry_date")
+  vehicleNo    String?   @map("vehicle_no")
+  biltyNo      String?   @map("bilty_no")
+  broker       String?
+  remarks      String?
+  status       String    @default("posted")
+  taxableValue Float     @default(0) @map("taxable_value")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  totalAmount  Float     @default(0) @map("total_amount")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  customer  Party?     @relation("SaleCustomer", fields: [customerId], references: [id])
+  warehouse Warehouse  @relation(fields: [warehouseId], references: [id])
+  items     SaleItem[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id           Int       @id @default(autoincrement())
+  saleId       Int       @map("sale_id")
+  productId    Int       @map("product_id")
+  hsn          String?
+  pcs          Float?
+  quantity     Float
+  baseRate     Float     @map("base_rate")
+  sizeDiff     Float     @default(0) @map("size_diff")
+  netRate      Float     @map("net_rate")
+  taxableValue Float     @map("taxable_value")
+  gstRate      Float     @default(0) @map("gst_rate")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  amount       Float
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+model SaleReturn {
+  id           Int       @id @default(autoincrement())
+  voucherNo    String    @unique @map("voucher_no")
+  invoiceNo    String?   @map("invoice_no")
+  customerId   Int?      @map("customer_id")
+  warehouseId  Int       @map("warehouse_id")
+  returnDate   String    @map("return_date")
+  batchNo      String?   @map("batch_no")
+  expiryDate   String?   @map("expiry_date")
+  vehicleNo    String?   @map("vehicle_no")
+  biltyNo      String?   @map("bilty_no")
+  broker       String?
+  remarks      String?
+  status       String    @default("posted")
+  taxableValue Float     @default(0) @map("taxable_value")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  totalAmount  Float     @default(0) @map("total_amount")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  customer  Party?           @relation("SaleReturnCustomer", fields: [customerId], references: [id])
+  warehouse Warehouse        @relation(fields: [warehouseId], references: [id])
+  items     SaleReturnItem[]
+
+  @@map("sale_returns")
+}
+
+model SaleReturnItem {
+  id           Int       @id @default(autoincrement())
+  saleReturnId Int       @map("sale_return_id")
+  productId    Int       @map("product_id")
+  hsn          String?
+  pcs          Float?
+  quantity     Float
+  baseRate     Float     @map("base_rate")
+  sizeDiff     Float     @default(0) @map("size_diff")
+  netRate      Float     @map("net_rate")
+  taxableValue Float     @map("taxable_value")
+  gstRate      Float     @default(0) @map("gst_rate")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  amount       Float
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@map("sale_return_items")
+}
+
+model PurchaseReturn {
+  id           Int       @id @default(autoincrement())
+  voucherNo    String    @unique @map("voucher_no")
+  invoiceNo    String?   @map("invoice_no")
+  supplierId   Int?      @map("supplier_id")
+  warehouseId  Int       @map("warehouse_id")
+  returnDate   String    @map("return_date")
+  batchNo      String?   @map("batch_no")
+  expiryDate   String?   @map("expiry_date")
+  vehicleNo    String?   @map("vehicle_no")
+  biltyNo      String?   @map("bilty_no")
+  broker       String?
+  remarks      String?
+  status       String    @default("posted")
+  taxableValue Float     @default(0) @map("taxable_value")
+  gstAmount    Float     @default(0) @map("gst_amount")
+  totalAmount  Float     @default(0) @map("total_amount")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  supplier  Party?               @relation("PurchaseReturnSupplier", fields: [supplierId], references: [id])
+  warehouse Warehouse            @relation(fields: [warehouseId], references: [id])
+  items     PurchaseReturnItem[]
+
+  @@map("purchase_returns")
+}
+
+model PurchaseReturnItem {
+  id               Int       @id @default(autoincrement())
+  purchaseReturnId Int       @map("purchase_return_id")
+  productId        Int       @map("product_id")
+  hsn              String?
+  pcs              Float?
+  quantity         Float
+  baseRate         Float     @map("base_rate")
+  sizeDiff         Float     @default(0) @map("size_diff")
+  netRate          Float     @map("net_rate")
+  taxableValue     Float     @map("taxable_value")
+  gstRate          Float     @default(0) @map("gst_rate")
+  gstAmount        Float     @default(0) @map("gst_amount")
+  amount           Float
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  purchaseReturn PurchaseReturn @relation(fields: [purchaseReturnId], references: [id])
+  product        Product        @relation(fields: [productId], references: [id])
+
+  @@map("purchase_return_items")
+}
+
+model Production {
+  id             Int       @id @default(autoincrement())
+  voucherNo      String    @unique @map("voucher_no")
+  warehouseId    Int       @map("warehouse_id")
+  productionDate String    @map("production_date")
+  isRecurring    Boolean   @default(false) @map("is_recurring")
+  status         String    @default("posted")
+  remarks        String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  warehouse Warehouse        @relation(fields: [warehouseId], references: [id])
+  items     ProductionItem[]
+
+  @@map("production")
+}
+
+model ProductionItem {
+  id            Int       @id @default(autoincrement())
+  productionId  Int       @map("production_id")
+  productId     Int       @map("product_id")
+  batchNo       String?   @map("batch_no")
+  issuedQty     Float     @default(0) @map("issued_qty")
+  issuedPcs     Float     @default(0) @map("issued_pcs")
+  productionQty Float     @default(0) @map("production_qty")
+  productionPcs Float     @default(0) @map("production_pcs")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  production Production @relation(fields: [productionId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@map("production_items")
+}
+
+model StockTransaction {
+  id              Int                  @id @default(autoincrement())
+  transactionNo   String               @unique @map("transaction_no")
+  sourceType      String               @map("source_type")
+  sourceId        Int?                 @map("source_id")
+  transactionType StockTransactionType @map("transaction_type")
+  productId       Int                  @map("product_id")
+  warehouseId     Int                  @map("warehouse_id")
+  partyId         Int?                 @map("party_id")
+  quantity        Float
+  rate            Float                @default(0)
+  amount          Float                @default(0)
+  referenceNo     String?              @map("reference_no")
+  notes           String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  deletedAt       DateTime?            @map("deleted_at")
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  party     Party?    @relation(fields: [partyId], references: [id])
+
+  @@index([productId, warehouseId, transactionType, createdAt], map: "idx_stock_transactions_lookup")
+  @@map("stock_transactions")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  actorUserId Int?     @map("actor_user_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    Int?     @map("entity_id")
+  payloadJson String   @default("{}") @map("payload_json")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([createdAt], map: "idx_audit_logs_created_at")
+  @@map("audit_logs")
+}

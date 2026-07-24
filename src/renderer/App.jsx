@@ -13,6 +13,7 @@ import { PurchaseReturnVoucherPanel } from './components/PurchaseReturnVoucherPa
 import { ProductionVoucherPanel } from './components/ProductionVoucherPanel.jsx';
 import { StockMasterPanel } from './components/StockMasterPanel.jsx';
 import { PartyMasterPanel } from './components/PartyMasterPanel.jsx';
+import { HsnMasterPanel } from './components/HsnMasterPanel.jsx';
 import { ItemLedgerPanel } from './components/ItemLedgerPanel.jsx';
 import { DailyStockSummaryPanel } from './components/DailyStockSummaryPanel.jsx';
 
@@ -27,6 +28,7 @@ export default function App() {
     parties,
     categories,
     units,
+    hsns,
     busy,
     error,
     setBootstrapStatus,
@@ -38,6 +40,7 @@ export default function App() {
     setParties,
     setCategories,
     setUnits,
+    setHsns,
     setBusy,
     setError
   } = useSessionStore();
@@ -56,11 +59,12 @@ export default function App() {
   };
 
   const refreshMasters = async () => {
-    const [productRows, partyRows, categoryRows, unitRows] = await Promise.all([
+    const [productRows, partyRows, categoryRows, unitRows, hsnRows] = await Promise.all([
       window.stockOps.listMaster('product', {}),
       window.stockOps.listMaster('party', {}),
       window.stockOps.listMaster('category', {}),
-      window.stockOps.listMaster('unit', {})
+      window.stockOps.listMaster('unit', {}),
+      window.stockOps.listMaster('hsn', {})
     ]);
 
     const productsWithStock = await Promise.all(
@@ -74,6 +78,7 @@ export default function App() {
     setParties(partyRows);
     setCategories(categoryRows);
     setUnits(unitRows);
+    setHsns(hsnRows);
   };
 
   useEffect(() => {
@@ -316,6 +321,7 @@ export default function App() {
           products={products}
           categories={categories}
           units={units}
+          hsns={hsns}
           busy={busy}
           onCreate={createProduct}
           onUpdate={updateProduct}
@@ -332,6 +338,18 @@ export default function App() {
           onCreate={(values) => createMaster('party', values)}
           onUpdate={(id, values) => updateMasterRecord('party', id, values)}
           onDelete={(id) => deleteMaster('party', id)}
+        />
+      );
+    }
+
+    if (activeView === 'hsn-master') {
+      return (
+        <HsnMasterPanel
+          rows={hsns}
+          busy={busy}
+          onCreate={(values) => createMaster('hsn', values)}
+          onUpdate={(id, values) => updateMasterRecord('hsn', id, values)}
+          onDelete={(id) => deleteMaster('hsn', id)}
         />
       );
     }

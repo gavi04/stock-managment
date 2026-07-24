@@ -1,24 +1,26 @@
 import { BaseRepository } from './baseRepository.js';
+import { toWire } from '../utils/caseMapper.js';
 
 export class LookupRepository extends BaseRepository {
-  constructor(tableName, searchColumns = ['name', 'code']) {
-    super(tableName);
+  constructor(modelName, searchColumns = ['name', 'code']) {
+    super(modelName);
     this.searchColumns = searchColumns;
   }
 
-  findPage({ page = 1, pageSize = 25, search = '' } = {}) {
-    const offset = (page - 1) * pageSize;
-    const whereParts = ['deleted_at IS NULL'];
-    const params = {};
+  async findPage({ page = 1, pageSize = 25, search = '' } = {}) {
+    const where = { deletedAt: null };
 
     if (search) {
-      const searchClause = this.searchColumns.map((column) => `${column} LIKE :search`).join(' OR ');
-      whereParts.push(`(${searchClause})`);
-      params.search = `%${search}%`;
+      where.OR = this.searchColumns.map((column) => ({ [column]: { contains: search } }));
     }
 
-    const whereClause = whereParts.join(' AND ');
-    const rows = this.findAll(whereClause, params);
-    return rows.slice(offset, offset + pageSize);
+    const rows = await this.model.findMany({
+      where,
+      orderBy: { id: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    });
+
+    return toWire(rows);
   }
 }

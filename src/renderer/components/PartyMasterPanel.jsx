@@ -7,23 +7,23 @@ const partySchema = z.object({
   id: z.number().optional(),
   name: z.string().min(1, 'Party Name is required'),
   code: z.string().min(1, 'Party Code is required'),
-  type: z.enum(['customer', 'supplier', 'both']).default('customer'),
   mobile: z.string().optional().nullable(),
-  email: z.string().email('Invalid email').optional().nullable().or(z.literal('')),
   address: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   district: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
   pin_code: z.string().optional().nullable(),
-  gstin: z.string().optional().nullable()
+  gstin: z
+    .string()
+    .regex(/^[0-9A-Z]{15}$/, 'GST No. must be 15 uppercase letters/digits')
+    .optional()
+    .or(z.literal(''))
 });
 
 const defaultValues = {
   name: '',
   code: '',
-  type: 'customer',
   mobile: '',
-  email: '',
   address: '',
   city: '',
   district: '',
@@ -67,9 +67,7 @@ export function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
     reset({
       name: row.name,
       code: row.code,
-      type: row.type,
       mobile: row.mobile || '',
-      email: row.email || '',
       address: row.address || '',
       city: row.city || '',
       district: row.district || '',
@@ -210,10 +208,10 @@ export function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
 
             <label className="field">
               <span>Mobile Number</span>
-              <input 
+              <input
                 id="party-mobile"
-                {...register('mobile')} 
-                onKeyDown={(e) => handleKeyDown(e, 'party-type')}
+                {...register('mobile')}
+                onKeyDown={(e) => handleKeyDown(e, 'party-code')}
               />
               {errors.mobile && <small>{errors.mobile.message}</small>}
             </label>
@@ -223,22 +221,13 @@ export function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <label className="field">
               <span>Party Code <span style={{color: 'red'}}>*</span></span>
-              <input 
+              <input
                 id="party-code"
-                {...register('code')} 
+                {...register('code')}
                 onKeyDown={(e) => handleKeyDown(e, 'party-submit')}
               />
               {errors.code && <small>{errors.code.message}</small>}
               <small className="stock-hint">Auto-generated, can be overridden.</small>
-            </label>
-
-            <label className="field">
-              <span>Type</span>
-              <select id="party-type" {...register('type')} onKeyDown={(e) => handleKeyDown(e, 'party-code')}>
-                <option value="customer">Customer</option>
-                <option value="supplier">Supplier</option>
-                <option value="both">Both</option>
-              </select>
             </label>
 
             <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
@@ -266,14 +255,13 @@ export function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
                 <th>GSTIN</th>
                 <th>City</th>
                 <th>Mobile</th>
-                <th>Type</th>
                 <th style={{ width: '120px', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>No parties found.</td>
+                  <td colSpan={6}>No parties found.</td>
                 </tr>
               ) : (
                 rows.map((row) => (
@@ -283,7 +271,6 @@ export function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
                     <td>{row.gstin || '-'}</td>
                     <td>{row.city || '-'}</td>
                     <td>{row.mobile || '-'}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{row.type}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="action-buttons">
                         <button className="icon-button" onClick={() => onEdit(row)}>✏️</button>

@@ -1,22 +1,33 @@
 import { BaseRepository } from './baseRepository.js';
-import { getOne } from '../db/queryRunner.js';
+import { toWire } from '../utils/caseMapper.js';
+
+function flattenWithRole(row) {
+  if (!row) return null;
+  const { role, ...user } = row;
+  const wire = toWire(user);
+  wire.role_code = role.code;
+  wire.permissions_json = role.permissionsJson;
+  return wire;
+}
 
 export class UsersRepository extends BaseRepository {
   constructor() {
-    super('users');
+    super('user');
   }
 
-  findByUsername(username) {
-    return getOne(
-      'SELECT users.*, roles.code as role_code, roles.permissions_json FROM users INNER JOIN roles ON roles.id = users.role_id WHERE users.username = :username AND users.deleted_at IS NULL',
-      { username }
-    );
+  async findByUsername(username) {
+    const row = await this.model.findFirst({
+      where: { username, deletedAt: null },
+      include: { role: true }
+    });
+    return flattenWithRole(row);
   }
 
-  findByUsernameWithPassword(username) {
-    return getOne(
-      'SELECT users.*, roles.code as role_code, roles.permissions_json FROM users INNER JOIN roles ON roles.id = users.role_id WHERE users.username = :username',
-      { username }
-    );
+  async findByUsernameWithPassword(username) {
+    const row = await this.model.findFirst({
+      where: { username },
+      include: { role: true }
+    });
+    return flattenWithRole(row);
   }
 }

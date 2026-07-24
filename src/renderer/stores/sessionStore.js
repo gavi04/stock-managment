@@ -15,6 +15,7 @@ export const useSessionStore = create((set) => ({
   parties: [],
   categories: [],
   units: [],
+  hsns: [],
   busy: false,
   error: null,
   setBootstrapStatus: (bootstrapStatus) => set({ bootstrapStatus }),
@@ -26,6 +27,7 @@ export const useSessionStore = create((set) => ({
   setParties: (parties) => set({ parties }),
   setCategories: (categories) => set({ categories }),
   setUnits: (units) => set({ units }),
+  setHsns: (hsns) => set({ hsns }),
   setBusy: (busy) => set({ busy }),
   setError: (error) => set({ error })
 }));

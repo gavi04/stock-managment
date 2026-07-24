@@ -1,42 +1,56 @@
-import { getAll, getOne, runQuery, runTransaction } from '../db/queryRunner.js';
+import { getPrismaClient } from '../db/database.js';
+import { fromWire, toWire } from '../utils/caseMapper.js';
 
 export class BaseRepository {
-  constructor(tableName) {
-    this.tableName = tableName;
+  constructor(modelName) {
+    this.modelName = modelName;
   }
 
-  findById(id) {
-    return getOne(`SELECT * FROM ${this.tableName} WHERE id = :id AND deleted_at IS NULL`, { id });
+  get model() {
+    return getPrismaClient()[this.modelName];
   }
 
-  findAll(whereClause = 'deleted_at IS NULL', params = {}) {
-    return getAll(`SELECT * FROM ${this.tableName} WHERE ${whereClause} ORDER BY id DESC`, params);
+  async findById(id) {
+    const row = await this.model.findFirst({ where: { id: Number(id), deletedAt: null } });
+    return toWire(row);
   }
 
-  create(columns, data) {
-    const placeholders = columns.map((column) => `:${column}`).join(', ');
-    const sql = `INSERT INTO ${this.tableName} (${columns.join(', ')}) VALUES (${placeholders})`;
-    const result = runQuery(sql, data);
-    return this.findById(result.lastInsertRowid);
+  async findAll(where = {}) {
+    const rows = await this.model.findMany({
+      where: { deletedAt: null, ...where },
+      orderBy: { id: 'desc' }
+    });
+    return toWire(rows);
   }
 
-  update(id, columns, data) {
-    const assignments = columns.map((column) => `${column} = :${column}`).join(', ');
-    runQuery(
-      `UPDATE ${this.tableName} SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND deleted_at IS NULL`,
-      { ...data, id }
-    );
-    return this.findById(id);
+  async create(data) {
+    const row = await this.model.create({ data: fromWire(data) });
+    return toWire(row);
   }
 
-  softDelete(id) {
-    return runQuery(
-      `UPDATE ${this.tableName} SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND deleted_at IS NULL`,
-      { id }
-    );
+  async update(id, data) {
+    const existing = await this.model.findFirst({ where: { id: Number(id), deletedAt: null } });
+    if (!existing) return null;
+
+    const row = await this.model.update({
+      where: { id: Number(id) },
+      data: fromWire(data)
+    });
+    return toWire(row);
+  }
+
+  async softDelete(id) {
+    const existing = await this.model.findFirst({ where: { id: Number(id), deletedAt: null } });
+    if (!existing) return null;
+
+    const row = await this.model.update({
+      where: { id: Number(id) },
+      data: { deletedAt: new Date() }
+    });
+    return toWire(row);
   }
 
   transaction(callback) {
-    return runTransaction(callback);
+    return getPrismaClient().$transaction(callback);
   }
 }
