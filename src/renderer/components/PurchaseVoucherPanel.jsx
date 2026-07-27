@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { SearchableSelect } from './SearchableSelect.jsx';
+import { handleGridKeyNav } from '../utils/gridKeyNav.js';
+import { todayDdmmyyyy } from '../utils/dateFormat.js';
+import { handleFormKeyNav } from '../utils/formKeyNav.js';
 
 function createEmptyRow() {
   return {
@@ -47,7 +50,7 @@ function recalcRow(row, changedField) {
 
 export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   const [voucherNo, setVoucherNo] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [purchaseDate, setPurchaseDate] = useState(todayDdmmyyyy());
   const [customerId, setCustomerId] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [batchNo, setBatchNo] = useState('');
@@ -99,22 +102,16 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
     });
   };
 
-  const handleKeyDown = (e, rowIndex, colIndex, lastCol) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (colIndex === lastCol) {
-        setItems((prev) => [...prev, createEmptyRow()]);
-        setTimeout(() => {
-          const nextRowInput = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select, tr:nth-child(${rowIndex + 2}) input`);
-          nextRowInput?.focus();
-        }, 50);
-      } else {
-        const inputs = Array.from(e.currentTarget.closest('tr').querySelectorAll('input:not([readonly]):not([disabled]), select'));
-        const nextInput = inputs[inputs.indexOf(e.currentTarget) + 1];
-        nextInput?.focus();
-      }
-    }
+  const appendRow = () => {
+    setItems((prev) => [...prev, createEmptyRow()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll('tbody tr');
+      const lastRow = rows?.[rows.length - 1];
+      lastRow?.querySelector('select, input:not([readonly]):not([disabled])')?.focus();
+    }, 30);
   };
+
+  const onGridKey = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
 
   const removeRow = (index) => {
     if (items.length === 1) {
@@ -203,7 +200,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* HEADER SECTION */}
-      <section className="panel" style={{ padding: '16px' }}>
+      <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h2>Purchase Voucher</h2>
           {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
@@ -212,7 +209,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '16px', marginBottom: '16px' }}>
           <label className="field">
             <span>Date</span>
-            <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
+            <input type="text" placeholder="dd/mm/yyyy" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
           </label>
           <label className="field">
             <span>Voucher No.</span>
@@ -240,7 +237,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
           </label>
           <label className="field">
             <span>Expiry Date</span>
-            <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            <input type="text" placeholder="dd/mm/yyyy" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
           </label>
         </div>
 
@@ -260,22 +257,22 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
       {/* GRID SECTION */}
       <section className="panel" style={{ flex: 1, padding: '0', display: 'flex', flexDirection: 'column' }}>
         <div style={{ overflow: 'auto', flex: 1 }}>
-          <table ref={gridRef} style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
+          <table ref={gridRef} className="voucher-grid" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '820px' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#f8f8f6', zIndex: 1 }}>
               <tr>
-                <th style={{ width: '36px' }}>#</th>
-                <th style={{ width: '160px' }}>Item</th>
-                <th style={{ width: '160px' }}>Stock Name</th>
-                <th>HSN</th>
-                <th>Pcs</th>
-                <th>Qty</th>
-                <th>Base Rate</th>
-                <th>Size Diff</th>
-                <th>Net Rate</th>
-                <th>Taxable</th>
-                <th>GST %</th>
-                <th>Amount</th>
-                <th style={{ width: '36px' }}></th>
+                <th style={{ width: '28px' }}>#</th>
+                <th style={{ width: '150px' }}>Item</th>
+                <th style={{ width: '130px' }}>Stock Name</th>
+                <th style={{ width: '58px' }}>HSN</th>
+                <th style={{ width: '48px' }}>Pcs</th>
+                <th style={{ width: '58px' }}>Qty</th>
+                <th style={{ width: '66px' }}>Base</th>
+                <th style={{ width: '58px' }}>Diff</th>
+                <th style={{ width: '66px' }}>Net</th>
+                <th style={{ width: '80px' }}>Taxable</th>
+                <th style={{ width: '48px' }}>GST%</th>
+                <th style={{ width: '82px' }}>Amount</th>
+                <th style={{ width: '26px' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -288,7 +285,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
                       <select
                         value={row.product_id}
                         onChange={(e) => handleRowChange(i, 'product_id', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 0, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       >
                         <option value=""></option>
@@ -303,7 +300,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
                       <input
                         value={row.product_name}
                         onChange={(e) => handleRowChange(i, 'product_name', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 1, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       />
                     </td>
@@ -312,66 +309,73 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.pcs}
                         disabled={!pcsMode}
                         onChange={(e) => handleRowChange(i, 'pcs', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 2, 9)}
+                        onKeyDown={onGridKey}
                         style={pcsMode ? inputStyle : readonlyStyle}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.quantity}
                         disabled={pcsMode}
                         onChange={(e) => handleRowChange(i, 'quantity', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 3, 9)}
+                        onKeyDown={onGridKey}
                         style={pcsMode ? readonlyStyle : inputStyle}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.base_rate}
                         onChange={(e) => handleRowChange(i, 'base_rate', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 4, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.size_diff}
                         onChange={(e) => handleRowChange(i, 'size_diff', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 5, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.net_rate}
                         onChange={(e) => handleRowChange(i, 'net_rate', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 6, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.taxable_value}
                         onChange={(e) => handleRowChange(i, 'taxable_value', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 7, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={row.gst_rate}
                         onChange={(e) => handleRowChange(i, 'gst_rate', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, i, 9, 9)}
+                        onKeyDown={onGridKey}
                         style={inputStyle}
                       />
                     </td>
@@ -397,7 +401,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
       </section>
 
       {/* FOOTER SECTION */}
-      <section className="panel" style={{ padding: '16px' }}>
+      <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', gap: '24px' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <label className="field">

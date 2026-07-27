@@ -13,7 +13,7 @@ import { PurchaseReturnVoucherPanel } from './components/PurchaseReturnVoucherPa
 import { ProductionVoucherPanel } from './components/ProductionVoucherPanel.jsx';
 import { StockMasterPanel } from './components/StockMasterPanel.jsx';
 import { PartyMasterPanel } from './components/PartyMasterPanel.jsx';
-import { HsnMasterPanel } from './components/HsnMasterPanel.jsx';
+import { CodesUnitsPanel } from './components/CodesUnitsPanel.jsx';
 import { ItemLedgerPanel } from './components/ItemLedgerPanel.jsx';
 import { DailyStockSummaryPanel } from './components/DailyStockSummaryPanel.jsx';
 
@@ -28,7 +28,6 @@ export default function App() {
     parties,
     categories,
     units,
-    hsns,
     busy,
     error,
     setBootstrapStatus,
@@ -40,7 +39,6 @@ export default function App() {
     setParties,
     setCategories,
     setUnits,
-    setHsns,
     setBusy,
     setError
   } = useSessionStore();
@@ -59,12 +57,12 @@ export default function App() {
   };
 
   const refreshMasters = async () => {
-    const [productRows, partyRows, categoryRows, unitRows, hsnRows] = await Promise.all([
+    // HSN (~21k) is not loaded up-front; it's searched on demand in the pickers.
+    const [productRows, partyRows, categoryRows, unitRows] = await Promise.all([
       window.stockOps.listMaster('product', {}),
       window.stockOps.listMaster('party', {}),
       window.stockOps.listMaster('category', {}),
-      window.stockOps.listMaster('unit', {}),
-      window.stockOps.listMaster('hsn', {})
+      window.stockOps.listMaster('unit', { pageSize: 1000 })
     ]);
 
     const productsWithStock = await Promise.all(
@@ -78,7 +76,6 @@ export default function App() {
     setParties(partyRows);
     setCategories(categoryRows);
     setUnits(unitRows);
-    setHsns(hsnRows);
   };
 
   useEffect(() => {
@@ -154,12 +151,9 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const productPayload = {
-        ...payload,
-        code: payload.code || `ITM-${Date.now().toString().slice(-6)}`
-      };
-
-      const created = await window.stockOps.createMaster('product', productPayload);
+      // Item code is auto-generated in the form (name/size/length) and editable;
+      // if left blank the main process fills it with the same rule.
+      const created = await window.stockOps.createMaster('product', payload);
 
       if (Number(payload.opening_qty || 0) > 0) {
         await window.stockOps.recordStockTransaction({
@@ -181,6 +175,7 @@ export default function App() {
       await Promise.all([refreshMasters(), refreshDashboard()]);
     } catch (createError) {
       setError(createError.message || 'Unable to create product');
+      throw createError; // surface to the Stock Master form (e.g. duplicate code)
     } finally {
       setBusy(false);
     }
@@ -190,13 +185,11 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.updateMaster('product', id, {
-        ...payload,
-        code: payload.code || `ITM-${String(id).padStart(4, '0')}`
-      });
+      await window.stockOps.updateMaster('product', id, payload);
       await Promise.all([refreshMasters(), refreshDashboard()]);
     } catch (updateError) {
       setError(updateError.message || 'Unable to update product');
+      throw updateError; // surface to the Stock Master form
     } finally {
       setBusy(false);
     }
@@ -321,7 +314,6 @@ export default function App() {
           products={products}
           categories={categories}
           units={units}
-          hsns={hsns}
           busy={busy}
           onCreate={createProduct}
           onUpdate={updateProduct}
@@ -342,16 +334,8 @@ export default function App() {
       );
     }
 
-    if (activeView === 'hsn-master') {
-      return (
-        <HsnMasterPanel
-          rows={hsns}
-          busy={busy}
-          onCreate={(values) => createMaster('hsn', values)}
-          onUpdate={(id, values) => updateMasterRecord('hsn', id, values)}
-          onDelete={(id) => deleteMaster('hsn', id)}
-        />
-      );
+    if (activeView === 'codes-units') {
+      return <CodesUnitsPanel units={units} onRefresh={refreshMasters} />;
     }
 
     if (activeView === 'purchase-entry') {

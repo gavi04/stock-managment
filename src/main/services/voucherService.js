@@ -134,14 +134,16 @@ export class VoucherService {
   async saveSaleReturnVoucher(payload) {
     const prisma = getPrismaClient();
     if (!payload.voucher_no) payload.voucher_no = await this.getNextSaleReturnVoucherNo();
+    const customerId = payload.customer_id ? Number(payload.customer_id) : null;
+    const warehouseId = Number(payload.warehouse_id) || 1;
 
     const srId = await prisma.$transaction(async (tx) => {
       const saleReturn = await tx.saleReturn.create({
         data: {
           voucherNo: payload.voucher_no,
           invoiceNo: payload.invoice_no,
-          customerId: payload.customer_id,
-          warehouseId: payload.warehouse_id || 1,
+          customerId,
+          warehouseId,
           returnDate: payload.return_date,
           batchNo: payload.batch_no,
           expiryDate: payload.expiry_date,
@@ -160,17 +162,17 @@ export class VoucherService {
         await tx.saleReturnItem.create({
           data: {
             saleReturnId: saleReturn.id,
-            productId: item.product_id,
+            productId: Number(item.product_id),
             hsn: item.hsn,
-            pcs: item.pcs,
-            quantity: item.quantity,
-            baseRate: item.base_rate,
-            sizeDiff: item.size_diff,
-            netRate: item.net_rate,
-            taxableValue: item.taxable_value,
-            gstRate: item.gst_rate,
-            gstAmount: item.gst_amount,
-            amount: item.amount
+            pcs: Number(item.pcs) || 0,
+            quantity: Number(item.quantity) || 0,
+            baseRate: Number(item.base_rate) || 0,
+            sizeDiff: Number(item.size_diff) || 0,
+            netRate: Number(item.net_rate) || 0,
+            taxableValue: Number(item.taxable_value) || 0,
+            gstRate: Number(item.gst_rate) || 0,
+            gstAmount: Number(item.gst_amount) || 0,
+            amount: Number(item.amount) || 0
           }
         });
 
@@ -181,10 +183,10 @@ export class VoucherService {
             sourceType: 'sale_return',
             sourceId: saleReturn.id,
             transactionType: 'sale_return',
-            productId: item.product_id,
-            warehouseId: payload.warehouse_id || 1,
-            partyId: payload.customer_id,
-            quantity: Number(item.quantity),
+            productId: Number(item.product_id),
+            warehouseId,
+            partyId: customerId,
+            quantity: movementQty(item),
             rate: Number(item.net_rate),
             amount: Number(item.taxable_value),
             referenceNo: payload.invoice_no,
@@ -208,14 +210,16 @@ export class VoucherService {
   async saveSaleVoucher(payload) {
     const prisma = getPrismaClient();
     if (!payload.voucher_no) payload.voucher_no = await this.getNextSaleVoucherNo();
+    const customerId = payload.customer_id ? Number(payload.customer_id) : null;
+    const warehouseId = Number(payload.warehouse_id) || 1;
 
     const saleId = await prisma.$transaction(async (tx) => {
       const sale = await tx.sale.create({
         data: {
           voucherNo: payload.voucher_no,
           invoiceNo: payload.invoice_no,
-          customerId: payload.customer_id,
-          warehouseId: payload.warehouse_id || 1,
+          customerId,
+          warehouseId,
           saleDate: payload.sale_date,
           batchNo: payload.batch_no,
           expiryDate: payload.expiry_date,
@@ -234,17 +238,17 @@ export class VoucherService {
         await tx.saleItem.create({
           data: {
             saleId: sale.id,
-            productId: item.product_id,
+            productId: Number(item.product_id),
             hsn: item.hsn,
-            pcs: item.pcs,
-            quantity: item.quantity,
-            baseRate: item.base_rate,
-            sizeDiff: item.size_diff,
-            netRate: item.net_rate,
-            taxableValue: item.taxable_value,
-            gstRate: item.gst_rate,
-            gstAmount: item.gst_amount,
-            amount: item.amount
+            pcs: Number(item.pcs) || 0,
+            quantity: Number(item.quantity) || 0,
+            baseRate: Number(item.base_rate) || 0,
+            sizeDiff: Number(item.size_diff) || 0,
+            netRate: Number(item.net_rate) || 0,
+            taxableValue: Number(item.taxable_value) || 0,
+            gstRate: Number(item.gst_rate) || 0,
+            gstAmount: Number(item.gst_amount) || 0,
+            amount: Number(item.amount) || 0
           }
         });
 
@@ -255,10 +259,10 @@ export class VoucherService {
             sourceType: 'sale',
             sourceId: sale.id,
             transactionType: 'sale',
-            productId: item.product_id,
-            warehouseId: payload.warehouse_id || 1,
-            partyId: payload.customer_id,
-            quantity: -Math.abs(Number(item.quantity)),
+            productId: Number(item.product_id),
+            warehouseId,
+            partyId: customerId,
+            quantity: -Math.abs(movementQty(item)),
             rate: Number(item.net_rate),
             amount: Number(item.taxable_value),
             referenceNo: payload.invoice_no,
@@ -282,14 +286,16 @@ export class VoucherService {
   async savePurchaseReturnVoucher(payload) {
     const prisma = getPrismaClient();
     if (!payload.voucher_no) payload.voucher_no = await this.getNextPurchaseReturnVoucherNo();
+    const supplierId = payload.supplier_id ? Number(payload.supplier_id) : null;
+    const warehouseId = Number(payload.warehouse_id) || 1;
 
     const prId = await prisma.$transaction(async (tx) => {
       const purchaseReturn = await tx.purchaseReturn.create({
         data: {
           voucherNo: payload.voucher_no,
           invoiceNo: payload.invoice_no,
-          supplierId: payload.supplier_id,
-          warehouseId: payload.warehouse_id || 1,
+          supplierId,
+          warehouseId,
           returnDate: payload.return_date,
           batchNo: payload.batch_no,
           expiryDate: payload.expiry_date,
@@ -308,17 +314,17 @@ export class VoucherService {
         await tx.purchaseReturnItem.create({
           data: {
             purchaseReturnId: purchaseReturn.id,
-            productId: item.product_id,
+            productId: Number(item.product_id),
             hsn: item.hsn,
-            pcs: item.pcs,
-            quantity: item.quantity,
-            baseRate: item.base_rate,
-            sizeDiff: item.size_diff,
-            netRate: item.net_rate,
-            taxableValue: item.taxable_value,
-            gstRate: item.gst_rate,
-            gstAmount: item.gst_amount,
-            amount: item.amount
+            pcs: Number(item.pcs) || 0,
+            quantity: Number(item.quantity) || 0,
+            baseRate: Number(item.base_rate) || 0,
+            sizeDiff: Number(item.size_diff) || 0,
+            netRate: Number(item.net_rate) || 0,
+            taxableValue: Number(item.taxable_value) || 0,
+            gstRate: Number(item.gst_rate) || 0,
+            gstAmount: Number(item.gst_amount) || 0,
+            amount: Number(item.amount) || 0
           }
         });
 
@@ -329,10 +335,10 @@ export class VoucherService {
             sourceType: 'purchase_return',
             sourceId: purchaseReturn.id,
             transactionType: 'purchase_return',
-            productId: item.product_id,
-            warehouseId: payload.warehouse_id || 1,
-            partyId: payload.supplier_id,
-            quantity: -Math.abs(Number(item.quantity)),
+            productId: Number(item.product_id),
+            warehouseId,
+            partyId: supplierId,
+            quantity: -Math.abs(movementQty(item)),
             rate: Number(item.net_rate),
             amount: Number(item.taxable_value),
             referenceNo: payload.invoice_no,
@@ -356,12 +362,13 @@ export class VoucherService {
   async saveProductionVoucher(payload) {
     const prisma = getPrismaClient();
     if (!payload.voucher_no) payload.voucher_no = await this.getNextProductionVoucherNo();
+    const warehouseId = Number(payload.warehouse_id) || 1;
 
     const prodId = await prisma.$transaction(async (tx) => {
       const production = await tx.production.create({
         data: {
           voucherNo: payload.voucher_no,
-          warehouseId: payload.warehouse_id || 1,
+          warehouseId,
           productionDate: payload.production_date,
           isRecurring: Boolean(payload.is_recurring),
           status: 'posted',
@@ -373,12 +380,12 @@ export class VoucherService {
         await tx.productionItem.create({
           data: {
             productionId: production.id,
-            productId: item.product_id,
+            productId: Number(item.product_id),
             batchNo: item.batch_no,
-            issuedQty: item.issued_qty,
-            issuedPcs: item.issued_pcs,
-            productionQty: item.production_qty,
-            productionPcs: item.production_pcs
+            issuedQty: Number(item.issued_qty) || 0,
+            issuedPcs: Number(item.issued_pcs) || 0,
+            productionQty: Number(item.production_qty) || 0,
+            productionPcs: Number(item.production_pcs) || 0
           }
         });
 
@@ -390,8 +397,8 @@ export class VoucherService {
               sourceType: 'production',
               sourceId: production.id,
               transactionType: 'production_out',
-              productId: item.product_id,
-              warehouseId: payload.warehouse_id || 1,
+              productId: Number(item.product_id),
+              warehouseId,
               quantity: -Math.abs(Number(item.issued_qty)),
               rate: 0,
               amount: 0,
@@ -408,8 +415,8 @@ export class VoucherService {
               sourceType: 'production',
               sourceId: production.id,
               transactionType: 'production_in',
-              productId: item.product_id,
-              warehouseId: payload.warehouse_id || 1,
+              productId: Number(item.product_id),
+              warehouseId,
               quantity: Math.abs(Number(item.production_qty)),
               rate: 0,
               amount: 0,

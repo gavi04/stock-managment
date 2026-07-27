@@ -435,7 +435,7 @@ model ProductionItem {
 
 model StockTransaction {
   id              Int                  @id @default(autoincrement())
-  transactionNo   String               @unique @map("transaction_no")
+  transactionNo   String               @map("transaction_no")
   sourceType      String               @map("source_type")
   sourceId        Int?                 @map("source_id")
   transactionType StockTransactionType @map("transaction_type")

@@ -1,9 +1,25 @@
+import uomData from './data/uom.json';
+import hsnData from './data/hsn.json';
+import { logger } from '../utils/logger.js';
+
 const ROLES = [
   { name: 'Admin', code: 'ADMIN', permissionsJson: JSON.stringify(['*']) },
   { name: 'Manager', code: 'MANAGER', permissionsJson: JSON.stringify(['inventory:*', 'masters:*', 'reports:read', 'backup:read']) },
   { name: 'Operator', code: 'OPERATOR', permissionsJson: JSON.stringify(['inventory:write', 'masters:read', 'reports:read']) },
   { name: 'Viewer', code: 'VIEWER', permissionsJson: JSON.stringify(['masters:read', 'inventory:read', 'reports:read']) }
 ];
+
+// Insert any rows (keyed by `code`) that aren't already present, in batches to
+// stay within SQLite's parameter limit. Idempotent without needing
+// skipDuplicates (which the Prisma SQLite adapter doesn't support).
+async function seedMissingByCode(model, rows, size = 500) {
+  if ((await model.count()) >= rows.length) return; // already fully seeded
+  const existing = new Set((await model.findMany({ select: { code: true } })).map((r) => r.code));
+  const missing = rows.filter((r) => !existing.has(r.code));
+  for (let i = 0; i < missing.length; i += size) {
+    await model.createMany({ data: missing.slice(i, i + size) });
+  }
+}
 
 export async function seedDatabase(prisma) {
   for (const role of ROLES) {
@@ -41,21 +57,18 @@ export async function seedDatabase(prisma) {
     });
   }
 
-  await prisma.hsn.upsert({
-    where: { code: '0000' },
-    update: {},
-    create: { code: '0000', description: 'Unclassified' }
-  });
-
-  await prisma.unit.upsert({
-    where: { code: 'UOM-KG' },
-    update: {},
-    create: { name: 'Kg', code: 'UOM-KG', symbol: 'kg' }
-  });
-
   await prisma.warehouse.upsert({
     where: { code: 'WH-MAIN' },
     update: {},
     create: { name: 'Main Warehouse', code: 'WH-MAIN', location: 'Head Office', isDefault: true }
   });
+
+  // Units (UOM, 45) and HSN codes (~21k) from the provided masters. Guarded so
+  // a data hiccup can't stop the app from starting.
+  try {
+    await seedMissingByCode(prisma.unit, uomData);
+    await seedMissingByCode(prisma.hsn, hsnData);
+  } catch (err) {
+    logger.error('reference-data seed failed', { message: err?.message });
+  }
 }

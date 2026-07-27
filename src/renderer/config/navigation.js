@@ -8,7 +8,7 @@ export const NAVIGATION = [
     items: [
       { key: 'stock-master', label: 'Stock Master' },
       { key: 'party-master', label: 'Party Master' },
-      { key: 'hsn-master', label: 'HSN Master' }
+      { key: 'codes-units', label: 'Codes & Units' }
     ]
   },
   {
@@ -40,7 +40,7 @@ export const VIEW_LABELS = {
   dashboard: 'Dashboard',
   'stock-master': 'Stock Master',
   'party-master': 'Party Master',
-  'hsn-master': 'HSN Master',
+  'codes-units': 'Codes & Units',
   'purchase-entry': 'Purchase Entry',
   'sale-return-entry': 'Sale Return Entry',
   'production-entry': 'Production Entry',

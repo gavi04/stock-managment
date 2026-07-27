@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { buildItemCode } from '../../shared/itemCode.js';
+import { handleFormKeyNav } from '../utils/formKeyNav.js';
+import { HsnSelect } from './HsnSelect.jsx';
 
 const stockMasterSchema = z.object({
   name: z.string().min(1, 'Item name is required'),
@@ -20,11 +23,14 @@ const stockMasterSchema = z.object({
   description: z.string().optional().default(''),
   opening_qty: z.coerce.number().min(0).default(0),
   opening_date: z.string().optional().default(''),
-  isi_mark: z.boolean().default(false)
+  isi_mark: z.enum(['yes', 'no']).default('no')
 });
 
 function todayDateInputValue() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
 function getDefaultValues() {
@@ -45,24 +51,41 @@ function getDefaultValues() {
     description: '',
     opening_qty: 0,
     opening_date: todayDateInputValue(),
-    isi_mark: false
+    isi_mark: 'no'
   };
 }
 
-export function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdate, onDelete, busy }) {
+export function StockMasterPanel({ products, categories, units, onCreate, onUpdate, onDelete, busy }) {
   const [showForm, setShowForm] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [groupFilter, setGroupFilter] = useState('all');
+  // Once the user manually edits the code, stop auto-generating it.
+  const [codeTouched, setCodeTouched] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(stockMasterSchema),
     defaultValues: getDefaultValues()
   });
+
+  const watchedName = watch('name');
+  const watchedSize = watch('size');
+  const watchedLength = watch('length');
+
+  // Auto-fill the item code from name/size/length while creating a new item,
+  // unless the user has overridden it. Existing items keep their saved code.
+  useEffect(() => {
+    if (!editingId && !codeTouched) {
+      setValue('code', buildItemCode(watchedName, watchedSize, watchedLength));
+    }
+  }, [watchedName, watchedSize, watchedLength, editingId, codeTouched, setValue]);
 
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -99,7 +122,7 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
       batch_no: values.batch_no.trim() || null,
       description: values.description.trim() || null,
       opening_stock_date: values.opening_date || null,
-      isi_mark: Boolean(values.isi_mark),
+      isi_mark: values.isi_mark === 'yes',
       is_active: true,
       // Transient — consumed by App to record the opening-balance stock movement.
       opening_qty: Number(values.opening_qty),
@@ -107,19 +130,32 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
       opening_date: values.opening_date || todayDateInputValue()
     };
 
-    if (editingId) {
-      await onUpdate(editingId, payload);
-    } else {
-      await onCreate(payload);
+    setFormError(null);
+    try {
+      if (editingId) {
+        await onUpdate(editingId, payload);
+      } else {
+        await onCreate(payload);
+      }
+    } catch (err) {
+      // e.g. duplicate item code — keep the form so the user can fix it.
+      const clean = (err?.message || 'Unable to save item')
+        .replace(/^Error invoking remote method '[^']*':\s*/, '')
+        .replace(/^AppError:\s*/, '');
+      setFormError(clean);
+      return;
     }
 
     setEditingId(null);
+    setCodeTouched(false);
     reset(getDefaultValues());
   };
 
   const startEdit = (row) => {
     setEditingId(row.id);
     setShowForm(true);
+    // Keep the existing code as-is; don't regenerate it from name/size/length.
+    setCodeTouched(true);
     reset({
       name: row.name ?? '',
       code: row.code ?? '',
@@ -137,12 +173,14 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
       description: row.description ?? '',
       opening_qty: 0,
       opening_date: row.opening_stock_date || todayDateInputValue(),
-      isi_mark: Boolean(row.isi_mark)
+      isi_mark: row.isi_mark ? 'yes' : 'no'
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
+    setCodeTouched(false);
+    setFormError(null);
     reset(getDefaultValues());
   };
 
@@ -161,16 +199,12 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
       {showForm ? (
         <section className="panel stock-form-panel">
           <h3>{editingId ? 'Edit Item' : 'New Item'}</h3>
-          <form className="stock-grid-form" onSubmit={handleSubmit(submit)}>
+          {formError ? <p className="error-message">{formError}</p> : null}
+          <form className="stock-grid-form" onSubmit={handleSubmit(submit)} onKeyDown={handleFormKeyNav}>
             <label>
               Stock Name
               <input {...register('name')} />
               {errors.name ? <small>{errors.name.message}</small> : null}
-            </label>
-            <label>
-              Item Code
-              <input {...register('code')} placeholder="Auto if empty" />
-              <small className="stock-hint">Unique. Auto-generated, can be overridden.</small>
             </label>
             <label>
               Group
@@ -185,15 +219,8 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
             </label>
             <label>
               HSN Code
-              <select {...register('hsn')}>
-                <option value="">Select</option>
-                {hsns.map((item) => (
-                  <option key={item.id} value={item.code}>
-                    {item.code}
-                    {item.description ? ` — ${item.description}` : ''}
-                  </option>
-                ))}
-              </select>
+              <HsnSelect value={watch('hsn')} onChange={(code) => setValue('hsn', code, { shouldDirty: true })} />
+              <input type="hidden" {...register('hsn')} />
             </label>
             <label>
               UOM
@@ -223,19 +250,19 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
             </label>
             <label>
               GST Rate (%)
-              <input type="number" step="0.01" {...register('gst_rate')} />
+              <input type="text" inputMode="decimal" step="0.01" {...register('gst_rate')} />
             </label>
             <label>
               Sale Rate
-              <input type="number" step="0.01" {...register('sale_rate')} />
+              <input type="text" inputMode="decimal" step="0.01" {...register('sale_rate')} />
             </label>
             <label>
               Purchase Rate
-              <input type="number" step="0.01" {...register('purchase_rate')} />
+              <input type="text" inputMode="decimal" step="0.01" {...register('purchase_rate')} />
             </label>
             <label>
               Size Difference
-              <input type="number" step="0.01" {...register('size_diff')} />
+              <input type="text" inputMode="decimal" step="0.01" {...register('size_diff')} />
             </label>
             <label>
               Batch No.
@@ -243,19 +270,32 @@ export function StockMasterPanel({ products, categories, units, hsns, onCreate, 
             </label>
             <label>
               Opening Stock Qty
-              <input type="number" step="0.001" {...register('opening_qty')} />
+              <input type="text" inputMode="decimal" step="0.001" {...register('opening_qty')} />
             </label>
             <label>
               Opening Stock Date
-              <input type="date" {...register('opening_date')} />
+              <input type="text" placeholder="dd/mm/yyyy" {...register('opening_date')} />
             </label>
             <label style={{ gridColumn: 'span 2' }}>
               General Description
               <input {...register('description')} />
             </label>
-            <label className="checkbox-label">
-              <input type="checkbox" {...register('isi_mark')} />
+            <label>
               ISI Marked
+              <select {...register('isi_mark')}>
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </label>
+            <label style={{ gridColumn: 'span 2' }}>
+              Item Code
+              <input
+                {...register('code', { onChange: () => setCodeTouched(true) })}
+                placeholder="Auto from name / size / length"
+              />
+              <small className="stock-hint">
+                Auto-generated as name/size/length. Unique, can be overridden.
+              </small>
             </label>
 
             <div className="stock-form-actions">

@@ -1,25 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import { handleGridKeyNav } from '../utils/gridKeyNav.js';
+import { todayDdmmyyyy } from '../utils/dateFormat.js';
+import { handleFormKeyNav } from '../utils/formKeyNav.js';
+import { emptyVoucherRow, recalcVoucherRow, applyProductToRow, rowHasQty, toItemPayload } from '../utils/voucherRow.js';
 
-function createEmptyRow() {
-  return {
-    id: Date.now() + Math.random(),
-    product_id: '',
-    hsn: '',
-    pcs: '',
-    quantity: '',
-    base_rate: '',
-    size_diff: '0',
-    net_rate: '',
-    taxable_value: '',
-    gst_rate: '0',
-    gst_amount: '',
-    amount: ''
-  };
-}
+const createEmptyRow = emptyVoucherRow;
 
 export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
   const [voucherNo, setVoucherNo] = useState('');
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(todayDdmmyyyy());
   const [supplierId, setSupplierId] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [batchNo, setBatchNo] = useState('');
@@ -38,64 +27,30 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
     window.stockOps.getNextPurchaseReturnVoucherNo().then(setVoucherNo).catch(console.error);
   }, []);
 
-  const calculateRow = (row) => {
-    const qty = Number(row.quantity) || 0;
-    const base = Number(row.base_rate) || 0;
-    const diff = Number(row.size_diff) || 0;
-    const net = Math.max(0, base - diff);
-    const taxable = qty * net;
-    const gstRate = Number(row.gst_rate) || 0;
-    const gstAmount = taxable * (gstRate / 100);
-    const amount = taxable + gstAmount;
-
-    return {
-      ...row,
-      net_rate: net.toFixed(2),
-      taxable_value: taxable.toFixed(2),
-      gst_amount: gstAmount.toFixed(2),
-      amount: amount.toFixed(2)
-    };
-  };
-
   const handleRowChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-
-    if (field === 'product_id') {
-      const product = products.find(p => String(p.id) === String(value));
-      if (product) {
-        newItems[index].gst_rate = '18';
+    setItems((prev) => {
+      const next = [...prev];
+      let row = { ...next[index], [field]: value };
+      if (field === 'product_id') {
+        const product = products.find((p) => String(p.id) === String(value));
+        if (product) row = applyProductToRow(row, product, 'purchase_rate');
       }
-    }
-
-    newItems[index] = calculateRow(newItems[index]);
-    setItems(newItems);
+      next[index] = recalcVoucherRow(row, field);
+      return next;
+    });
   };
 
-  const handleKeyDown = (e, rowIndex, colIndex) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (colIndex === 8) {
-        setItems(prev => [...prev, createEmptyRow()]);
-        setTimeout(() => {
-          const nextRow = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select`);
-          nextRow?.focus();
-        }, 50);
-      } else {
-        const inputs = Array.from(e.currentTarget.parentElement.parentElement.querySelectorAll('input, select'));
-        const next = inputs[inputs.indexOf(e.currentTarget) + 1];
-        next?.focus();
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const next = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) select`);
-      next?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prev = gridRef.current?.querySelector(`tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) select`);
-      prev?.focus();
-    }
+  const appendRow = () => {
+    setItems(prev => [...prev, createEmptyRow()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll('tbody tr');
+      const last = rows?.[rows.length - 1];
+      last?.querySelector('select, input:not([readonly]):not([disabled])')?.focus();
+    }, 30);
   };
+
+  // Full up/down/left/right grid navigation; extra args from JSX are ignored.
+  const handleKeyDown = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
 
   const removeRow = (index) => {
     if (items.length === 1) setItems([createEmptyRow()]);
@@ -112,8 +67,8 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
   const handleSave = async () => {
     setError(null);
     try {
-      const validItems = items.filter(i => i.product_id && Number(i.quantity) > 0);
-      if (validItems.length === 0) throw new Error('Add at least one valid item.');
+      const validItems = items.filter(rowHasQty);
+      if (validItems.length === 0) throw new Error('Add at least one item with a pcs or quantity.');
       if (!supplierId) throw new Error('Supplier is required.');
 
       const payload = {
@@ -131,12 +86,7 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
         taxable_value: totals.taxable,
         gst_amount: totals.gst,
         total_amount: totals.grand,
-        items: validItems.map(i => ({
-          product_id: i.product_id, hsn: i.hsn, pcs: i.pcs,
-          quantity: i.quantity, base_rate: i.base_rate, size_diff: i.size_diff,
-          net_rate: i.net_rate, taxable_value: i.taxable_value,
-          gst_rate: i.gst_rate, gst_amount: i.gst_amount, amount: i.amount
-        }))
+        items: validItems.map(toItemPayload)
       };
 
       await onSave(payload);
@@ -151,10 +101,13 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
     }
   };
 
+  const inputStyle = { width: '100%', border: '1px solid #d5cfc3', background: '#fff', color: '#4f6166' };
+  const readonlyStyle = { ...inputStyle, background: '#f2f0ea', color: '#5d6a6e' };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* HEADER */}
-      <section className="panel" style={{ padding: '16px' }}>
+      <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h2>Purchase Return Voucher</h2>
           {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
@@ -163,11 +116,11 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '16px', marginBottom: '16px' }}>
           <label className="field">
             <span>Date</span>
-            <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
+            <input type="text" placeholder="dd/mm/yyyy" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
           </label>
           <label className="field">
             <span>Voucher No.</span>
-            <input value={voucherNo} readOnly style={{ background: '#f5f5f5' }} />
+            <input value={voucherNo} readOnly style={{ background: '#f2f0ea' }} />
           </label>
           <label className="field">
             <span>Supplier</span>
@@ -191,7 +144,7 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
           </label>
           <label className="field">
             <span>Expiry Date</span>
-            <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+            <input type="text" placeholder="dd/mm/yyyy" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
           </label>
         </div>
 
@@ -211,21 +164,21 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
       {/* GRID */}
       <section className="panel" style={{ flex: 1, padding: '0', display: 'flex', flexDirection: 'column' }}>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          <table ref={gridRef} style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1 }}>
+          <table ref={gridRef} className="voucher-grid" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, background: '#f8f8f6', zIndex: 1 }}>
               <tr>
-                <th style={{ width: '40px' }}>#</th>
-                <th style={{ width: '200px' }}>Item</th>
-                <th>HSN</th>
-                <th>PCS</th>
-                <th>Qty</th>
-                <th>Base Rate</th>
-                <th>Diff</th>
-                <th>Net Rate</th>
-                <th>Taxable</th>
-                <th>GST %</th>
-                <th>Amount</th>
-                <th style={{ width: '40px' }}></th>
+                <th style={{ width: '28px' }}>#</th>
+                <th style={{ width: '180px' }}>Item</th>
+                <th style={{ width: '62px' }}>HSN</th>
+                <th style={{ width: '52px' }}>Pcs</th>
+                <th style={{ width: '62px' }}>Qty</th>
+                <th style={{ width: '72px' }}>Base</th>
+                <th style={{ width: '62px' }}>Diff</th>
+                <th style={{ width: '72px' }}>Net</th>
+                <th style={{ width: '86px' }}>Taxable</th>
+                <th style={{ width: '52px' }}>GST%</th>
+                <th style={{ width: '90px' }}>Amount</th>
+                <th style={{ width: '26px' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -233,20 +186,20 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
                 <tr key={row.id}>
                   <td style={{ textAlign: 'center' }}>{i + 1}</td>
                   <td>
-                    <select value={row.product_id} onChange={e => handleRowChange(i, 'product_id', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 0)} style={{ width: '100%', padding: '4px' }}>
+                    <select value={row.product_id} onChange={e => handleRowChange(i, 'product_id', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 0)} style={inputStyle}>
                       <option value=""></option>
                       {products.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
                     </select>
                   </td>
-                  <td><input value={row.hsn} onChange={e => handleRowChange(i, 'hsn', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 1)} style={{ width: '100%', padding: '4px' }} /></td>
-                  <td><input type="number" value={row.pcs} onChange={e => handleRowChange(i, 'pcs', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 2)} style={{ width: '100%', padding: '4px' }} /></td>
-                  <td><input type="number" value={row.quantity} onChange={e => handleRowChange(i, 'quantity', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 3)} style={{ width: '100%', padding: '4px' }} /></td>
-                  <td><input type="number" value={row.base_rate} onChange={e => handleRowChange(i, 'base_rate', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 4)} style={{ width: '100%', padding: '4px' }} /></td>
-                  <td><input type="number" value={row.size_diff} onChange={e => handleRowChange(i, 'size_diff', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 5)} style={{ width: '100%', padding: '4px' }} /></td>
-                  <td><input value={row.net_rate} readOnly tabIndex={-1} style={{ width: '100%', padding: '4px', background: '#f5f5f5' }} /></td>
-                  <td><input value={row.taxable_value} readOnly tabIndex={-1} style={{ width: '100%', padding: '4px', background: '#f5f5f5' }} /></td>
-                  <td><input type="number" value={row.gst_rate} onChange={e => handleRowChange(i, 'gst_rate', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 8)} style={{ width: '100%', padding: '4px' }} /></td>
-                  <td><input value={row.amount} readOnly tabIndex={-1} style={{ width: '100%', padding: '4px', background: '#f5f5f5' }} /></td>
+                  <td><input value={row.hsn} readOnly tabIndex={-1} style={readonlyStyle} /></td>
+                  <td><input type="text" inputMode="decimal" value={row.pcs} disabled={row.unit_basis !== 'pcs'} onChange={e => handleRowChange(i, 'pcs', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 2)} style={row.unit_basis === 'pcs' ? inputStyle : readonlyStyle} /></td>
+                  <td><input type="text" inputMode="decimal" value={row.quantity} disabled={row.unit_basis === 'pcs'} onChange={e => handleRowChange(i, 'quantity', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 3)} style={row.unit_basis === 'pcs' ? readonlyStyle : inputStyle} /></td>
+                  <td><input type="text" inputMode="decimal" value={row.base_rate} onChange={e => handleRowChange(i, 'base_rate', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 4)} style={inputStyle} /></td>
+                  <td><input type="text" inputMode="decimal" value={row.size_diff} onChange={e => handleRowChange(i, 'size_diff', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 5)} style={inputStyle} /></td>
+                  <td><input value={row.net_rate} readOnly tabIndex={-1} style={readonlyStyle} /></td>
+                  <td><input value={row.taxable_value} readOnly tabIndex={-1} style={readonlyStyle} /></td>
+                  <td><input type="text" inputMode="decimal" value={row.gst_rate} onChange={e => handleRowChange(i, 'gst_rate', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 8)} style={inputStyle} /></td>
+                  <td><input value={row.amount} readOnly tabIndex={-1} style={readonlyStyle} /></td>
                   <td style={{ textAlign: 'center' }}><button type="button" onClick={() => removeRow(i)} tabIndex={-1} style={{ padding: '2px 6px', background: 'transparent', color: 'red', border: 'none' }}>×</button></td>
                 </tr>
               ))}
@@ -256,7 +209,7 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
       </section>
 
       {/* FOOTER */}
-      <section className="panel" style={{ padding: '16px' }}>
+      <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', gap: '24px' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <label className="field">

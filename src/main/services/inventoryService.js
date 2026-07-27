@@ -206,11 +206,30 @@ export class InventoryService {
       where: {
         productId: { in: productIds },
         deletedAt: null,
-        createdAt: { gte: rangeStart, lt: rangeEnd }
+        createdAt: { gte: rangeStart, lt: rangeEnd },
+        transactionType: { not: 'opening_balance' }
       },
       select: { productId: true, transactionType: true, quantity: true, createdAt: true },
       orderBy: { createdAt: 'asc' }
     });
+
+    // Opening-balance movements inside the range are shown in the OPENING column
+    // on their date (not counted as a daily inflow), so opening stock is visible.
+    const openingTxns = await prisma.stockTransaction.findMany({
+      where: {
+        productId: { in: productIds },
+        deletedAt: null,
+        createdAt: { gte: rangeStart, lt: rangeEnd },
+        transactionType: 'opening_balance'
+      },
+      select: { productId: true, quantity: true, createdAt: true }
+    });
+    const openingByKey = new Map();
+    for (const txn of openingTxns) {
+      const date = txn.createdAt.toISOString().slice(0, 10);
+      const key = `${date}::${txn.productId}`;
+      openingByKey.set(key, (openingByKey.get(key) ?? 0) + Number(txn.quantity));
+    }
 
     const buckets = new Map();
     for (const txn of rangeTxns) {
@@ -245,6 +264,25 @@ export class InventoryService {
       else if (quantity < 0) bucket.other_out += Math.abs(quantity);
     }
 
+    // Items that only have an opening balance (no other movement) still get a row.
+    for (const key of openingByKey.keys()) {
+      if (!buckets.has(key)) {
+        const [date, pid] = key.split('::');
+        buckets.set(key, {
+          date,
+          product_id: Number(pid),
+          purchase: 0,
+          sale_return: 0,
+          production_in: 0,
+          sale: 0,
+          purchase_return: 0,
+          production_out: 0,
+          other_in: 0,
+          other_out: 0
+        });
+      }
+    }
+
     const sortedBuckets = [...buckets.values()].sort((a, b) => {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
       const nameA = productNameById.get(a.product_id) ?? '';
@@ -254,7 +292,8 @@ export class InventoryService {
 
     const result = [];
     for (const bucket of sortedBuckets) {
-      const opening = runningBalance.get(bucket.product_id) ?? 0;
+      const carried = runningBalance.get(bucket.product_id) ?? 0;
+      const opening = carried + (openingByKey.get(`${bucket.date}::${bucket.product_id}`) ?? 0);
       const totalIn = bucket.purchase + bucket.sale_return + bucket.production_in + bucket.other_in;
       const totalOut = bucket.sale + bucket.purchase_return + bucket.production_out + bucket.other_out;
       const closing = opening + totalIn - totalOut;

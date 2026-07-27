@@ -12609,7 +12609,7 @@ var ZodFirstPartyTypeKind;
 const stringType = ZodString.create;
 const numberType = ZodNumber.create;
 ZodBigInt.create;
-const booleanType = ZodBoolean.create;
+ZodBoolean.create;
 ZodDate.create;
 ZodNever.create;
 ZodArray.create;
@@ -12641,7 +12641,7 @@ const bootstrapSchema = objectType({
   username: stringType().min(1, "Username is required"),
   password: stringType().min(8, "Password must be at least 8 characters")
 });
-const defaultValues$2 = {
+const defaultValues$1 = {
   fullName: "",
   username: "",
   password: ""
@@ -12663,7 +12663,7 @@ function AuthForm({ onLogin, onBootstrap, needsBootstrap, busy }) {
     formState: { errors }
   } = useForm({
     resolver: t(schema),
-    defaultValues: defaultValues$2
+    defaultValues: defaultValues$1
   });
   const submit = async (values) => {
     if (mode === "bootstrap") {
@@ -12766,7 +12766,7 @@ const NAVIGATION = [
     items: [
       { key: "stock-master", label: "Stock Master" },
       { key: "party-master", label: "Party Master" },
-      { key: "hsn-master", label: "HSN Master" }
+      { key: "codes-units", label: "Codes & Units" }
     ]
   },
   {
@@ -12797,7 +12797,7 @@ const VIEW_LABELS = {
   dashboard: "Dashboard",
   "stock-master": "Stock Master",
   "party-master": "Party Master",
-  "hsn-master": "HSN Master",
+  "codes-units": "Codes & Units",
   "purchase-entry": "Purchase Entry",
   "sale-return-entry": "Sale Return Entry",
   "production-entry": "Production Entry",
@@ -12811,7 +12811,7 @@ const ICONS = {
   dashboard: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
   "stock-master": "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10",
   "party-master": "M17 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM22 20v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11",
-  "hsn-master": "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h7.9a2 2 0 0 1 1.5.6l7.4 7.4a2 2 0 0 1 0 2.4ZM7.5 7.5h.01",
+  "codes-units": "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h7.9a2 2 0 0 1 1.5.6l7.4 7.4a2 2 0 0 1 0 2.4ZM7.5 7.5h.01",
   "purchase-entry": "M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
   "sale-entry": "M12 21V9m0 0 4 4m-4-4-4 4M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2",
   "sale-return-entry": "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H8",
@@ -13059,6 +13059,288 @@ function SearchableSelect({ options, value, onChange, placeholder = "Search…",
     ) : null
   ] });
 }
+const FOCUSABLE$1 = "input:not([readonly]):not([disabled]), select:not([disabled])";
+function firstFocusable(cell) {
+  return cell ? cell.querySelector(FOCUSABLE$1) : null;
+}
+function place$1(el, caret) {
+  el.focus();
+  if (caret === "start" || caret === "end") {
+    if (typeof el.setSelectionRange === "function") {
+      try {
+        const pos = caret === "end" ? el.value.length : 0;
+        el.setSelectionRange(pos, pos);
+      } catch {
+      }
+    }
+  } else if (typeof el.select === "function") {
+    try {
+      el.select();
+    } catch {
+    }
+  }
+}
+function moveRow(el, direction) {
+  const td = el.closest("td");
+  const tr = td && td.closest("tr");
+  if (!td || !tr) return false;
+  const colIndex = [...tr.children].indexOf(td);
+  const targetRow = direction > 0 ? tr.nextElementSibling : tr.previousElementSibling;
+  const target = firstFocusable(targetRow && targetRow.children[colIndex]);
+  if (target) {
+    place$1(target, "select");
+    return true;
+  }
+  return false;
+}
+function moveCell(el, direction) {
+  const td = el.closest("td");
+  let cell = td && (direction > 0 ? td.nextElementSibling : td.previousElementSibling);
+  while (cell) {
+    const target = firstFocusable(cell);
+    if (target) {
+      place$1(target, direction > 0 ? "start" : "end");
+      return true;
+    }
+    cell = direction > 0 ? cell.nextElementSibling : cell.previousElementSibling;
+  }
+  return false;
+}
+function atBoundary(el, side) {
+  if (el.tagName === "SELECT") return true;
+  let start;
+  let end;
+  let len;
+  try {
+    start = el.selectionStart;
+    end = el.selectionEnd;
+    len = el.value.length;
+  } catch {
+    return true;
+  }
+  if (start == null) return true;
+  return side === "start" ? start === 0 && end === 0 : start === len && end === len;
+}
+function handleGridKeyNav(e, { onAppendRow } = {}) {
+  const el = e.currentTarget;
+  switch (e.key) {
+    case "ArrowDown":
+      e.preventDefault();
+      moveRow(el, 1);
+      return;
+    case "ArrowUp":
+      e.preventDefault();
+      moveRow(el, -1);
+      return;
+    case "ArrowRight":
+      if (atBoundary(el, "end") && moveCell(el, 1)) e.preventDefault();
+      return;
+    case "ArrowLeft":
+      if (atBoundary(el, "start") && moveCell(el, -1)) e.preventDefault();
+      return;
+    case "Enter": {
+      e.preventDefault();
+      const tbody = el.closest("tbody");
+      if (!tbody) return;
+      const all = [...tbody.querySelectorAll(FOCUSABLE$1)];
+      const i2 = all.indexOf(el);
+      if (i2 > -1 && i2 < all.length - 1) {
+        place$1(all[i2 + 1], "select");
+      } else if (onAppendRow) {
+        onAppendRow();
+      }
+      return;
+    }
+  }
+}
+function todayDdmmyyyy() {
+  const d = /* @__PURE__ */ new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+const FOCUSABLE = "input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])";
+function visibleFocusables(container) {
+  return [...container.querySelectorAll(FOCUSABLE)].filter(
+    (el) => el.offsetParent !== null && el.tabIndex !== -1
+  );
+}
+function openIfSelect(el) {
+  if (el.tagName === "SELECT" && typeof el.showPicker === "function") {
+    try {
+      el.showPicker();
+    } catch {
+    }
+  }
+}
+function place(el, caret) {
+  el.focus();
+  if (el.tagName === "SELECT") {
+    openIfSelect(el);
+    return;
+  }
+  if (caret === "start" || caret === "end") {
+    if (typeof el.setSelectionRange === "function") {
+      try {
+        const pos = caret === "end" ? el.value.length : 0;
+        el.setSelectionRange(pos, pos);
+      } catch {
+      }
+    }
+  } else if (typeof el.select === "function") {
+    try {
+      el.select();
+    } catch {
+    }
+  }
+}
+function geoNav(el, container, dir) {
+  const r0 = el.getBoundingClientRect();
+  const cx = r0.left + r0.width / 2;
+  const cy = r0.top + r0.height / 2;
+  const rowTol = Math.max(r0.height * 0.6, 14);
+  let best = null;
+  let bestScore = Infinity;
+  for (const it of visibleFocusables(container)) {
+    if (it === el) continue;
+    const r2 = it.getBoundingClientRect();
+    const dx = r2.left + r2.width / 2 - cx;
+    const dy = r2.top + r2.height / 2 - cy;
+    let primary;
+    let secondary;
+    if (dir === "down") {
+      if (dy <= 2) continue;
+      primary = dy;
+      secondary = Math.abs(dx);
+    } else if (dir === "up") {
+      if (dy >= -2) continue;
+      primary = -dy;
+      secondary = Math.abs(dx);
+    } else if (dir === "right") {
+      if (dx <= 2 || Math.abs(dy) > rowTol) continue;
+      primary = dx;
+      secondary = Math.abs(dy);
+    } else {
+      if (dx >= -2 || Math.abs(dy) > rowTol) continue;
+      primary = -dx;
+      secondary = Math.abs(dy);
+    }
+    const score = primary + secondary * 3;
+    if (score < bestScore) {
+      bestScore = score;
+      best = it;
+    }
+  }
+  return best;
+}
+function rowEdge(el, container, below) {
+  const r0 = el.getBoundingClientRect();
+  const cy = r0.top + r0.height / 2;
+  let best = null;
+  let bestRect = null;
+  for (const it of visibleFocusables(container)) {
+    if (it === el) continue;
+    const r2 = it.getBoundingClientRect();
+    const iy = r2.top + r2.height / 2;
+    if (below ? iy <= cy + 2 : iy >= cy - 2) continue;
+    if (!best) {
+      best = it;
+      bestRect = r2;
+      continue;
+    }
+    if (below) {
+      if (r2.top < bestRect.top - 2 || Math.abs(r2.top - bestRect.top) <= 2 && r2.left < bestRect.left) {
+        best = it;
+        bestRect = r2;
+      }
+    } else if (r2.top > bestRect.top + 2 || Math.abs(r2.top - bestRect.top) <= 2 && r2.left > bestRect.left) {
+      best = it;
+      bestRect = r2;
+    }
+  }
+  return best;
+}
+function nextField(el, container) {
+  return geoNav(el, container, "right") || rowEdge(el, container, true);
+}
+function prevField(el, container) {
+  return geoNav(el, container, "left") || rowEdge(el, container, false);
+}
+function atStart(el) {
+  try {
+    return el.selectionStart === 0 && el.selectionEnd === 0;
+  } catch {
+    return true;
+  }
+}
+function atEnd(el) {
+  try {
+    return el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+  } catch {
+    return true;
+  }
+}
+function handleFormKeyNav(e) {
+  const el = e.target;
+  if (!el || !["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) return;
+  const container = e.currentTarget;
+  if (el.tagName === "TEXTAREA") return;
+  if (el.tagName === "SELECT") {
+    if (e.key === "Enter" || e.key === "ArrowRight") {
+      const n2 = nextField(el, container);
+      if (n2) {
+        e.preventDefault();
+        place(n2, "start");
+      }
+    } else if (e.key === "ArrowLeft") {
+      const n2 = prevField(el, container);
+      if (n2) {
+        e.preventDefault();
+        place(n2, "end");
+      }
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      openIfSelect(el);
+    }
+    return;
+  }
+  const type = (el.getAttribute("type") || "text").toLowerCase();
+  const textLike = ["text", "search", "tel", "url", "email", "password"].includes(type);
+  if (e.key === "Enter") {
+    const n2 = nextField(el, container);
+    if (n2) {
+      e.preventDefault();
+      place(n2, "select");
+    }
+    return;
+  }
+  if (!textLike) return;
+  if (e.key === "ArrowDown") {
+    const t2 = geoNav(el, container, "down");
+    if (t2) {
+      e.preventDefault();
+      place(t2, "select");
+    }
+  } else if (e.key === "ArrowUp") {
+    const t2 = geoNav(el, container, "up");
+    if (t2) {
+      e.preventDefault();
+      place(t2, "select");
+    }
+  } else if (e.key === "ArrowRight" && atEnd(el)) {
+    const t2 = nextField(el, container);
+    if (t2) {
+      e.preventDefault();
+      place(t2, "start");
+    }
+  } else if (e.key === "ArrowLeft" && atStart(el)) {
+    const t2 = prevField(el, container);
+    if (t2) {
+      e.preventDefault();
+      place(t2, "end");
+    }
+  }
+}
 function createEmptyRow$4() {
   return {
     id: Date.now() + Math.random(),
@@ -13097,7 +13379,7 @@ function recalcRow(row, changedField) {
 }
 function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   const [voucherNo, setVoucherNo] = reactExports.useState("");
-  const [purchaseDate, setPurchaseDate] = reactExports.useState((/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+  const [purchaseDate, setPurchaseDate] = reactExports.useState(todayDdmmyyyy());
   const [customerId, setCustomerId] = reactExports.useState("");
   const [invoiceNo, setInvoiceNo] = reactExports.useState("");
   const [batchNo, setBatchNo] = reactExports.useState("");
@@ -13140,22 +13422,15 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
       return next;
     });
   };
-  const handleKeyDown = (e, rowIndex, colIndex, lastCol) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (colIndex === lastCol) {
-        setItems((prev) => [...prev, createEmptyRow$4()]);
-        setTimeout(() => {
-          const nextRowInput = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select, tr:nth-child(${rowIndex + 2}) input`);
-          nextRowInput?.focus();
-        }, 50);
-      } else {
-        const inputs = Array.from(e.currentTarget.closest("tr").querySelectorAll("input:not([readonly]):not([disabled]), select"));
-        const nextInput = inputs[inputs.indexOf(e.currentTarget) + 1];
-        nextInput?.focus();
-      }
-    }
+  const appendRow = () => {
+    setItems((prev) => [...prev, createEmptyRow$4()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll("tbody tr");
+      const lastRow = rows?.[rows.length - 1];
+      lastRow?.querySelector("select, input:not([readonly]):not([disabled])")?.focus();
+    }, 30);
   };
+  const onGridKey = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
   const removeRow = (index) => {
     if (items.length === 1) {
       setItems([createEmptyRow$4()]);
@@ -13234,7 +13509,7 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   const inputStyle = { width: "100%", padding: "5px 6px", border: "1px solid #d5cfc3", borderRadius: "6px", background: "#fff", color: "#4f6166" };
   const readonlyStyle = { ...inputStyle, background: "#f2f0ea", color: "#5d6a6e" };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "16px", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "Purchase Voucher" }),
         error && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "red", fontWeight: "bold" }, children: error })
@@ -13242,7 +13517,7 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: "16px", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: purchaseDate, onChange: (e) => setPurchaseDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: purchaseDate, onChange: (e) => setPurchaseDate(e.target.value) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Voucher No." }),
@@ -13272,7 +13547,7 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Expiry Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }, children: [
@@ -13287,21 +13562,21 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", {})
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflow: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, style: { width: "100%", borderCollapse: "collapse", minWidth: "1100px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflow: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, className: "voucher-grid", style: { width: "100%", borderCollapse: "collapse", minWidth: "820px" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f8f6", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "36px" }, children: "#" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "160px" }, children: "Item" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "160px" }, children: "Stock Name" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "HSN" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Pcs" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Qty" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Base Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Size Diff" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Net Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Taxable" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "GST %" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Amount" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "36px" } })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "28px" }, children: "#" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "150px" }, children: "Item" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "130px" }, children: "Stock Name" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "58px" }, children: "HSN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "48px" }, children: "Pcs" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "58px" }, children: "Qty" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "66px" }, children: "Base" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "58px" }, children: "Diff" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "66px" }, children: "Net" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "80px" }, children: "Taxable" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "48px" }, children: "GST%" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "82px" }, children: "Amount" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "26px" } })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: items.map((row, i2) => {
         const pcsMode = row.unit_basis === "pcs";
@@ -13312,7 +13587,7 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
             {
               value: row.product_id,
               onChange: (e) => handleRowChange(i2, "product_id", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 0, 9),
+              onKeyDown: onGridKey,
               style: inputStyle,
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "" }),
@@ -13329,7 +13604,7 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
             {
               value: row.product_name,
               onChange: (e) => handleRowChange(i2, "product_name", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 1, 9),
+              onKeyDown: onGridKey,
               style: inputStyle
             }
           ) }),
@@ -13337,72 +13612,79 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.pcs,
               disabled: !pcsMode,
               onChange: (e) => handleRowChange(i2, "pcs", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 2, 9),
+              onKeyDown: onGridKey,
               style: pcsMode ? inputStyle : readonlyStyle
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.quantity,
               disabled: pcsMode,
               onChange: (e) => handleRowChange(i2, "quantity", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 3, 9),
+              onKeyDown: onGridKey,
               style: pcsMode ? readonlyStyle : inputStyle
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.base_rate,
               onChange: (e) => handleRowChange(i2, "base_rate", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 4, 9),
+              onKeyDown: onGridKey,
               style: inputStyle
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.size_diff,
               onChange: (e) => handleRowChange(i2, "size_diff", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 5, 9),
+              onKeyDown: onGridKey,
               style: inputStyle
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.net_rate,
               onChange: (e) => handleRowChange(i2, "net_rate", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 6, 9),
+              onKeyDown: onGridKey,
               style: inputStyle
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.taxable_value,
               onChange: (e) => handleRowChange(i2, "taxable_value", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 7, 9),
+              onKeyDown: onGridKey,
               style: inputStyle
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
-              type: "number",
+              type: "text",
+              inputMode: "decimal",
               value: row.gst_rate,
               onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value),
-              onKeyDown: (e) => handleKeyDown(e, i2, 9, 9),
+              onKeyDown: onGridKey,
               style: inputStyle
             }
           ) }),
@@ -13420,7 +13702,7 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
         ] }, row.id);
       }) })
     ] }) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "24px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: "12px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
@@ -13468,11 +13750,13 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
     ] })
   ] });
 }
-function createEmptyRow$3() {
+function emptyVoucherRow() {
   return {
     id: Date.now() + Math.random(),
     product_id: "",
+    product_name: "",
     hsn: "",
+    unit_basis: "quantity",
     pcs: "",
     quantity: "",
     base_rate: "",
@@ -13484,9 +13768,60 @@ function createEmptyRow$3() {
     amount: ""
   };
 }
+function recalcVoucherRow(row, changedField) {
+  const next = { ...row };
+  const base = Number(next.base_rate) || 0;
+  const diff = Number(next.size_diff) || 0;
+  if (["base_rate", "size_diff", "product_id"].includes(changedField)) {
+    next.net_rate = (base + diff).toFixed(2);
+  }
+  const net = Number(next.net_rate) || 0;
+  const basisQty = next.unit_basis === "pcs" ? Number(next.pcs) || 0 : Number(next.quantity) || 0;
+  if (["base_rate", "size_diff", "net_rate", "pcs", "quantity", "product_id"].includes(changedField)) {
+    next.taxable_value = (basisQty * net).toFixed(2);
+  }
+  const taxable = Number(next.taxable_value) || 0;
+  const gstRate = Number(next.gst_rate) || 0;
+  next.gst_amount = (taxable * (gstRate / 100)).toFixed(2);
+  next.amount = (taxable + Number(next.gst_amount)).toFixed(2);
+  return next;
+}
+function applyProductToRow(row, product, baseRateField = "purchase_rate") {
+  const next = { ...row };
+  next.product_name = product.name ?? "";
+  next.hsn = product.hsn ?? "";
+  next.unit_basis = product.unit_basis === "pcs" ? "pcs" : "quantity";
+  next.size_diff = String(product.size_diff ?? 0);
+  next.gst_rate = String(product.gst_rate ?? 0);
+  next.base_rate = String(product[baseRateField] ?? 0);
+  if (next.unit_basis === "pcs") next.quantity = "";
+  else next.pcs = "";
+  return next;
+}
+function rowHasQty(row) {
+  return Boolean(row.product_id) && (Number(row.quantity) > 0 || Number(row.pcs) > 0);
+}
+function toItemPayload(row) {
+  return {
+    product_id: Number(row.product_id),
+    product_name: row.product_name || null,
+    hsn: row.hsn || null,
+    unit_basis: row.unit_basis || "quantity",
+    pcs: Number(row.pcs) || 0,
+    quantity: Number(row.quantity) || 0,
+    base_rate: Number(row.base_rate) || 0,
+    size_diff: Number(row.size_diff) || 0,
+    net_rate: Number(row.net_rate) || 0,
+    taxable_value: Number(row.taxable_value) || 0,
+    gst_rate: Number(row.gst_rate) || 0,
+    gst_amount: Number(row.gst_amount) || 0,
+    amount: Number(row.amount) || 0
+  };
+}
+const createEmptyRow$3 = emptyVoucherRow;
 function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
   const [voucherNo, setVoucherNo] = reactExports.useState("");
-  const [returnDate, setReturnDate] = reactExports.useState((/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+  const [returnDate, setReturnDate] = reactExports.useState(todayDdmmyyyy());
   const [customerId, setCustomerId] = reactExports.useState("");
   const [invoiceNo, setInvoiceNo] = reactExports.useState("");
   const [batchNo, setBatchNo] = reactExports.useState("");
@@ -13501,54 +13836,27 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
   reactExports.useEffect(() => {
     window.stockOps.getNextSaleReturnVoucherNo().then(setVoucherNo).catch(console.error);
   }, []);
-  const calculateRow = (row) => {
-    const qty = Number(row.quantity) || 0;
-    const base = Number(row.base_rate) || 0;
-    const diff = Number(row.size_diff) || 0;
-    const net = Math.max(0, base - diff);
-    const taxable = qty * net;
-    const gstRate = Number(row.gst_rate) || 0;
-    const gstAmount = taxable * (gstRate / 100);
-    const amount = taxable + gstAmount;
-    return { ...row, net_rate: net.toFixed(2), taxable_value: taxable.toFixed(2), gst_amount: gstAmount.toFixed(2), amount: amount.toFixed(2) };
-  };
   const handleRowChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    if (field === "product_id") {
-      const product = products.find((p) => String(p.id) === String(value));
-      if (product) {
-        newItems[index].base_rate = "";
-        newItems[index].gst_rate = "18";
+    setItems((prev) => {
+      const next = [...prev];
+      let row = { ...next[index], [field]: value };
+      if (field === "product_id") {
+        const product = products.find((p) => String(p.id) === String(value));
+        if (product) row = applyProductToRow(row, product, "sale_rate");
       }
-    }
-    newItems[index] = calculateRow(newItems[index]);
-    setItems(newItems);
+      next[index] = recalcVoucherRow(row, field);
+      return next;
+    });
   };
-  const handleKeyDown = (e, rowIndex, colIndex) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (colIndex === 8) {
-        setItems((prev) => [...prev, createEmptyRow$3()]);
-        setTimeout(() => {
-          const nextRowSelect = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select`);
-          nextRowSelect?.focus();
-        }, 50);
-      } else {
-        const inputs = Array.from(e.currentTarget.parentElement.parentElement.querySelectorAll("input, select"));
-        const nextInput = inputs[inputs.indexOf(e.currentTarget) + 1];
-        nextInput?.focus();
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const nextRowInput = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) select`);
-      nextRowInput?.focus();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prevRowInput = gridRef.current?.querySelector(`tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) select`);
-      prevRowInput?.focus();
-    }
+  const appendRow = () => {
+    setItems((prev) => [...prev, createEmptyRow$3()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll("tbody tr");
+      const last = rows?.[rows.length - 1];
+      last?.querySelector("select, input:not([readonly]):not([disabled])")?.focus();
+    }, 30);
   };
+  const handleKeyDown = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
   const removeRow = (index) => {
     if (items.length === 1) {
       setItems([createEmptyRow$3()]);
@@ -13565,8 +13873,8 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
   const handleSave = async () => {
     setError(null);
     try {
-      const validItems = items.filter((i2) => i2.product_id && Number(i2.quantity) > 0);
-      if (validItems.length === 0) throw new Error("Add at least one valid item.");
+      const validItems = items.filter(rowHasQty);
+      if (validItems.length === 0) throw new Error("Add at least one item with a pcs or quantity.");
       if (!customerId) throw new Error("Customer is required.");
       const payload = {
         voucher_no: voucherNo,
@@ -13583,19 +13891,7 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
         taxable_value: totals.taxable,
         gst_amount: totals.gst,
         total_amount: totals.grand,
-        items: validItems.map((i2) => ({
-          product_id: i2.product_id,
-          hsn: i2.hsn,
-          pcs: i2.pcs,
-          quantity: i2.quantity,
-          base_rate: i2.base_rate,
-          size_diff: i2.size_diff,
-          net_rate: i2.net_rate,
-          taxable_value: i2.taxable_value,
-          gst_rate: i2.gst_rate,
-          gst_amount: i2.gst_amount,
-          amount: i2.amount
-        }))
+        items: validItems.map(toItemPayload)
       };
       await onSave(payload);
       setInvoiceNo("");
@@ -13612,8 +13908,10 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
       setError(err.message || "Failed to save voucher");
     }
   };
+  const inputStyle = { width: "100%", border: "1px solid #d5cfc3", background: "#fff", color: "#4f6166" };
+  const readonlyStyle = { ...inputStyle, background: "#f2f0ea", color: "#5d6a6e" };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "16px", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "Sales Return Voucher" }),
         error && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "red", fontWeight: "bold" }, children: error })
@@ -13621,11 +13919,11 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: "16px", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: returnDate, onChange: (e) => setReturnDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: returnDate, onChange: (e) => setReturnDate(e.target.value) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Voucher No." }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#eee" } })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#f2f0ea" } })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Customer" }),
@@ -13650,7 +13948,7 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Expiry Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }, children: [
@@ -13665,24 +13963,24 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", {})
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, style: { width: "100%", borderCollapse: "collapse" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f9fa", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" }, children: "#" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "200px" }, children: "Item" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "HSN" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "PCS" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Qty" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Base Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Diff" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Net Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Taxable" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "GST %" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Amount" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" } })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, className: "voucher-grid", style: { width: "100%", borderCollapse: "collapse" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f8f6", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "28px" }, children: "#" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "180px" }, children: "Item" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "HSN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "52px" }, children: "Pcs" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "Qty" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "72px" }, children: "Base" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "Diff" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "72px" }, children: "Net" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "86px" }, children: "Taxable" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "52px" }, children: "GST%" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "90px" }, children: "Amount" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "26px" } })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: items.map((row, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: i2 + 1 }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 0), style: { width: "100%", padding: "4px" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "" }),
           products.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: p.id, children: [
             p.code,
@@ -13690,19 +13988,19 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
             p.name
           ] }, p.id))
         ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.hsn, onChange: (e) => handleRowChange(i2, "hsn", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 1), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.pcs, onChange: (e) => handleRowChange(i2, "pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 2), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.quantity, onChange: (e) => handleRowChange(i2, "quantity", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 3), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.base_rate, onChange: (e) => handleRowChange(i2, "base_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 4), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.size_diff, onChange: (e) => handleRowChange(i2, "size_diff", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 5), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.net_rate, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#eee" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.taxable_value, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#eee" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.gst_rate, onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 8), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.amount, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#eee" } }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.hsn, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.pcs, disabled: row.unit_basis !== "pcs", onChange: (e) => handleRowChange(i2, "pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: row.unit_basis === "pcs" ? inputStyle : readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.quantity, disabled: row.unit_basis === "pcs", onChange: (e) => handleRowChange(i2, "quantity", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: row.unit_basis === "pcs" ? readonlyStyle : inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.base_rate, onChange: (e) => handleRowChange(i2, "base_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.size_diff, onChange: (e) => handleRowChange(i2, "size_diff", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.net_rate, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.taxable_value, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.gst_rate, onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.amount, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => removeRow(i2), tabIndex: -1, style: { padding: "2px 6px", background: "transparent", color: "red", border: "none" }, children: "x" }) })
       ] }, row.id)) })
     ] }) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "24px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: "12px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
@@ -13742,25 +14040,10 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave }) {
     ] })
   ] });
 }
-function createEmptyRow$2() {
-  return {
-    id: Date.now() + Math.random(),
-    product_id: "",
-    hsn: "",
-    pcs: "",
-    quantity: "",
-    base_rate: "",
-    size_diff: "0",
-    net_rate: "",
-    taxable_value: "",
-    gst_rate: "0",
-    gst_amount: "",
-    amount: ""
-  };
-}
+const createEmptyRow$2 = emptyVoucherRow;
 function SaleVoucherPanel({ products, parties, busy, onSave }) {
   const [voucherNo, setVoucherNo] = reactExports.useState("");
-  const [saleDate, setSaleDate] = reactExports.useState((/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+  const [saleDate, setSaleDate] = reactExports.useState(todayDdmmyyyy());
   const [customerId, setCustomerId] = reactExports.useState("");
   const [invoiceNo, setInvoiceNo] = reactExports.useState("");
   const [batchNo, setBatchNo] = reactExports.useState("");
@@ -13775,59 +14058,27 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
   reactExports.useEffect(() => {
     window.stockOps.getNextSaleVoucherNo().then(setVoucherNo).catch(console.error);
   }, []);
-  const calculateRow = (row) => {
-    const qty = Number(row.quantity) || 0;
-    const base = Number(row.base_rate) || 0;
-    const diff = Number(row.size_diff) || 0;
-    const net = Math.max(0, base - diff);
-    const taxable = qty * net;
-    const gstRate = Number(row.gst_rate) || 0;
-    const gstAmount = taxable * (gstRate / 100);
-    const amount = taxable + gstAmount;
-    return {
-      ...row,
-      net_rate: net.toFixed(2),
-      taxable_value: taxable.toFixed(2),
-      gst_amount: gstAmount.toFixed(2),
-      amount: amount.toFixed(2)
-    };
-  };
   const handleRowChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    if (field === "product_id") {
-      const product = products.find((p) => String(p.id) === String(value));
-      if (product) {
-        newItems[index].gst_rate = "18";
+    setItems((prev) => {
+      const next = [...prev];
+      let row = { ...next[index], [field]: value };
+      if (field === "product_id") {
+        const product = products.find((p) => String(p.id) === String(value));
+        if (product) row = applyProductToRow(row, product, "sale_rate");
       }
-    }
-    newItems[index] = calculateRow(newItems[index]);
-    setItems(newItems);
+      next[index] = recalcVoucherRow(row, field);
+      return next;
+    });
   };
-  const handleKeyDown = (e, rowIndex, colIndex) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (colIndex === 8) {
-        setItems((prev) => [...prev, createEmptyRow$2()]);
-        setTimeout(() => {
-          const nextRow = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select`);
-          nextRow?.focus();
-        }, 50);
-      } else {
-        const inputs = Array.from(e.currentTarget.parentElement.parentElement.querySelectorAll("input, select"));
-        const next = inputs[inputs.indexOf(e.currentTarget) + 1];
-        next?.focus();
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const next = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) select`);
-      next?.focus();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prev = gridRef.current?.querySelector(`tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) select`);
-      prev?.focus();
-    }
+  const appendRow = () => {
+    setItems((prev) => [...prev, createEmptyRow$2()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll("tbody tr");
+      const last = rows?.[rows.length - 1];
+      last?.querySelector("select, input:not([readonly]):not([disabled])")?.focus();
+    }, 30);
   };
+  const handleKeyDown = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
   const removeRow = (index) => {
     if (items.length === 1) setItems([createEmptyRow$2()]);
     else setItems(items.filter((_, i2) => i2 !== index));
@@ -13841,8 +14092,8 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
   const handleSave = async () => {
     setError(null);
     try {
-      const validItems = items.filter((i2) => i2.product_id && Number(i2.quantity) > 0);
-      if (validItems.length === 0) throw new Error("Add at least one valid item.");
+      const validItems = items.filter(rowHasQty);
+      if (validItems.length === 0) throw new Error("Add at least one item with a pcs or quantity.");
       if (!customerId) throw new Error("Customer is required.");
       const payload = {
         voucher_no: voucherNo,
@@ -13859,19 +14110,7 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
         taxable_value: totals.taxable,
         gst_amount: totals.gst,
         total_amount: totals.grand,
-        items: validItems.map((i2) => ({
-          product_id: i2.product_id,
-          hsn: i2.hsn,
-          pcs: i2.pcs,
-          quantity: i2.quantity,
-          base_rate: i2.base_rate,
-          size_diff: i2.size_diff,
-          net_rate: i2.net_rate,
-          taxable_value: i2.taxable_value,
-          gst_rate: i2.gst_rate,
-          gst_amount: i2.gst_amount,
-          amount: i2.amount
-        }))
+        items: validItems.map(toItemPayload)
       };
       await onSave(payload);
       setInvoiceNo("");
@@ -13888,8 +14127,10 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
       setError(err.message || "Failed to save voucher");
     }
   };
+  const inputStyle = { width: "100%", border: "1px solid #d5cfc3", background: "#fff", color: "#4f6166" };
+  const readonlyStyle = { ...inputStyle, background: "#f2f0ea", color: "#5d6a6e" };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "16px", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "Sales Voucher" }),
         error && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "red", fontWeight: "bold" }, children: error })
@@ -13897,11 +14138,11 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: "16px", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: saleDate, onChange: (e) => setSaleDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: saleDate, onChange: (e) => setSaleDate(e.target.value) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Voucher No." }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#f5f5f5" } })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#f2f0ea" } })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Customer" }),
@@ -13926,7 +14167,7 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Expiry Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }, children: [
@@ -13941,24 +14182,24 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", {})
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, style: { width: "100%", borderCollapse: "collapse" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f9fa", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" }, children: "#" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "200px" }, children: "Item" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "HSN" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "PCS" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Qty" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Base Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Diff" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Net Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Taxable" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "GST %" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Amount" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" } })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, className: "voucher-grid", style: { width: "100%", borderCollapse: "collapse" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f8f6", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "28px" }, children: "#" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "180px" }, children: "Item" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "HSN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "52px" }, children: "Pcs" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "Qty" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "72px" }, children: "Base" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "Diff" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "72px" }, children: "Net" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "86px" }, children: "Taxable" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "52px" }, children: "GST%" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "90px" }, children: "Amount" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "26px" } })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: items.map((row, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: i2 + 1 }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 0), style: { width: "100%", padding: "4px" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "" }),
           products.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: p.id, children: [
             p.code,
@@ -13966,19 +14207,19 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
             p.name
           ] }, p.id))
         ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.hsn, onChange: (e) => handleRowChange(i2, "hsn", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 1), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.pcs, onChange: (e) => handleRowChange(i2, "pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 2), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.quantity, onChange: (e) => handleRowChange(i2, "quantity", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 3), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.base_rate, onChange: (e) => handleRowChange(i2, "base_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 4), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.size_diff, onChange: (e) => handleRowChange(i2, "size_diff", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 5), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.net_rate, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#f5f5f5" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.taxable_value, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#f5f5f5" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.gst_rate, onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 8), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.amount, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#f5f5f5" } }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.hsn, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.pcs, disabled: row.unit_basis !== "pcs", onChange: (e) => handleRowChange(i2, "pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: row.unit_basis === "pcs" ? inputStyle : readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.quantity, disabled: row.unit_basis === "pcs", onChange: (e) => handleRowChange(i2, "quantity", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: row.unit_basis === "pcs" ? readonlyStyle : inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.base_rate, onChange: (e) => handleRowChange(i2, "base_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.size_diff, onChange: (e) => handleRowChange(i2, "size_diff", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.net_rate, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.taxable_value, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.gst_rate, onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.amount, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => removeRow(i2), tabIndex: -1, style: { padding: "2px 6px", background: "transparent", color: "red", border: "none" }, children: "×" }) })
       ] }, row.id)) })
     ] }) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "24px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: "12px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
@@ -14018,25 +14259,10 @@ function SaleVoucherPanel({ products, parties, busy, onSave }) {
     ] })
   ] });
 }
-function createEmptyRow$1() {
-  return {
-    id: Date.now() + Math.random(),
-    product_id: "",
-    hsn: "",
-    pcs: "",
-    quantity: "",
-    base_rate: "",
-    size_diff: "0",
-    net_rate: "",
-    taxable_value: "",
-    gst_rate: "0",
-    gst_amount: "",
-    amount: ""
-  };
-}
+const createEmptyRow$1 = emptyVoucherRow;
 function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
   const [voucherNo, setVoucherNo] = reactExports.useState("");
-  const [returnDate, setReturnDate] = reactExports.useState((/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+  const [returnDate, setReturnDate] = reactExports.useState(todayDdmmyyyy());
   const [supplierId, setSupplierId] = reactExports.useState("");
   const [invoiceNo, setInvoiceNo] = reactExports.useState("");
   const [batchNo, setBatchNo] = reactExports.useState("");
@@ -14051,59 +14277,27 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
   reactExports.useEffect(() => {
     window.stockOps.getNextPurchaseReturnVoucherNo().then(setVoucherNo).catch(console.error);
   }, []);
-  const calculateRow = (row) => {
-    const qty = Number(row.quantity) || 0;
-    const base = Number(row.base_rate) || 0;
-    const diff = Number(row.size_diff) || 0;
-    const net = Math.max(0, base - diff);
-    const taxable = qty * net;
-    const gstRate = Number(row.gst_rate) || 0;
-    const gstAmount = taxable * (gstRate / 100);
-    const amount = taxable + gstAmount;
-    return {
-      ...row,
-      net_rate: net.toFixed(2),
-      taxable_value: taxable.toFixed(2),
-      gst_amount: gstAmount.toFixed(2),
-      amount: amount.toFixed(2)
-    };
-  };
   const handleRowChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    if (field === "product_id") {
-      const product = products.find((p) => String(p.id) === String(value));
-      if (product) {
-        newItems[index].gst_rate = "18";
+    setItems((prev) => {
+      const next = [...prev];
+      let row = { ...next[index], [field]: value };
+      if (field === "product_id") {
+        const product = products.find((p) => String(p.id) === String(value));
+        if (product) row = applyProductToRow(row, product, "purchase_rate");
       }
-    }
-    newItems[index] = calculateRow(newItems[index]);
-    setItems(newItems);
+      next[index] = recalcVoucherRow(row, field);
+      return next;
+    });
   };
-  const handleKeyDown = (e, rowIndex, colIndex) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (colIndex === 8) {
-        setItems((prev) => [...prev, createEmptyRow$1()]);
-        setTimeout(() => {
-          const nextRow = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select`);
-          nextRow?.focus();
-        }, 50);
-      } else {
-        const inputs = Array.from(e.currentTarget.parentElement.parentElement.querySelectorAll("input, select"));
-        const next = inputs[inputs.indexOf(e.currentTarget) + 1];
-        next?.focus();
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const next = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) select`);
-      next?.focus();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prev = gridRef.current?.querySelector(`tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) select`);
-      prev?.focus();
-    }
+  const appendRow = () => {
+    setItems((prev) => [...prev, createEmptyRow$1()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll("tbody tr");
+      const last = rows?.[rows.length - 1];
+      last?.querySelector("select, input:not([readonly]):not([disabled])")?.focus();
+    }, 30);
   };
+  const handleKeyDown = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
   const removeRow = (index) => {
     if (items.length === 1) setItems([createEmptyRow$1()]);
     else setItems(items.filter((_, i2) => i2 !== index));
@@ -14117,8 +14311,8 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
   const handleSave = async () => {
     setError(null);
     try {
-      const validItems = items.filter((i2) => i2.product_id && Number(i2.quantity) > 0);
-      if (validItems.length === 0) throw new Error("Add at least one valid item.");
+      const validItems = items.filter(rowHasQty);
+      if (validItems.length === 0) throw new Error("Add at least one item with a pcs or quantity.");
       if (!supplierId) throw new Error("Supplier is required.");
       const payload = {
         voucher_no: voucherNo,
@@ -14135,19 +14329,7 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
         taxable_value: totals.taxable,
         gst_amount: totals.gst,
         total_amount: totals.grand,
-        items: validItems.map((i2) => ({
-          product_id: i2.product_id,
-          hsn: i2.hsn,
-          pcs: i2.pcs,
-          quantity: i2.quantity,
-          base_rate: i2.base_rate,
-          size_diff: i2.size_diff,
-          net_rate: i2.net_rate,
-          taxable_value: i2.taxable_value,
-          gst_rate: i2.gst_rate,
-          gst_amount: i2.gst_amount,
-          amount: i2.amount
-        }))
+        items: validItems.map(toItemPayload)
       };
       await onSave(payload);
       setInvoiceNo("");
@@ -14164,8 +14346,10 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
       setError(err.message || "Failed to save voucher");
     }
   };
+  const inputStyle = { width: "100%", border: "1px solid #d5cfc3", background: "#fff", color: "#4f6166" };
+  const readonlyStyle = { ...inputStyle, background: "#f2f0ea", color: "#5d6a6e" };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "16px", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "Purchase Return Voucher" }),
         error && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "red", fontWeight: "bold" }, children: error })
@@ -14173,11 +14357,11 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: "16px", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: returnDate, onChange: (e) => setReturnDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: returnDate, onChange: (e) => setReturnDate(e.target.value) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Voucher No." }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#f5f5f5" } })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#f2f0ea" } })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Supplier" }),
@@ -14202,7 +14386,7 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Expiry Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: expiryDate, onChange: (e) => setExpiryDate(e.target.value) })
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }, children: [
@@ -14217,24 +14401,24 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", {})
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, style: { width: "100%", borderCollapse: "collapse" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f9fa", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" }, children: "#" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "200px" }, children: "Item" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "HSN" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "PCS" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Qty" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Base Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Diff" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Net Rate" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Taxable" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "GST %" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Amount" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" } })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, className: "voucher-grid", style: { width: "100%", borderCollapse: "collapse" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f8f6", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "28px" }, children: "#" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "180px" }, children: "Item" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "HSN" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "52px" }, children: "Pcs" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "Qty" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "72px" }, children: "Base" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "62px" }, children: "Diff" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "72px" }, children: "Net" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "86px" }, children: "Taxable" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "52px" }, children: "GST%" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "90px" }, children: "Amount" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "26px" } })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: items.map((row, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: i2 + 1 }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 0), style: { width: "100%", padding: "4px" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "" }),
           products.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: p.id, children: [
             p.code,
@@ -14242,19 +14426,19 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
             p.name
           ] }, p.id))
         ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.hsn, onChange: (e) => handleRowChange(i2, "hsn", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 1), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.pcs, onChange: (e) => handleRowChange(i2, "pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 2), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.quantity, onChange: (e) => handleRowChange(i2, "quantity", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 3), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.base_rate, onChange: (e) => handleRowChange(i2, "base_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 4), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.size_diff, onChange: (e) => handleRowChange(i2, "size_diff", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 5), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.net_rate, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#f5f5f5" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.taxable_value, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#f5f5f5" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.gst_rate, onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, 8), style: { width: "100%", padding: "4px" } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.amount, readOnly: true, tabIndex: -1, style: { width: "100%", padding: "4px", background: "#f5f5f5" } }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.hsn, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.pcs, disabled: row.unit_basis !== "pcs", onChange: (e) => handleRowChange(i2, "pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: row.unit_basis === "pcs" ? inputStyle : readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.quantity, disabled: row.unit_basis === "pcs", onChange: (e) => handleRowChange(i2, "quantity", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: row.unit_basis === "pcs" ? readonlyStyle : inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.base_rate, onChange: (e) => handleRowChange(i2, "base_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.size_diff, onChange: (e) => handleRowChange(i2, "size_diff", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.net_rate, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.taxable_value, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.gst_rate, onChange: (e) => handleRowChange(i2, "gst_rate", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.amount, readOnly: true, tabIndex: -1, style: readonlyStyle }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => removeRow(i2), tabIndex: -1, style: { padding: "2px 6px", background: "transparent", color: "red", border: "none" }, children: "×" }) })
       ] }, row.id)) })
     ] }) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "24px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: "12px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
@@ -14307,7 +14491,7 @@ function createEmptyRow() {
 }
 function ProductionVoucherPanel({ products, busy, onSave }) {
   const [voucherNo, setVoucherNo] = reactExports.useState("");
-  const [productionDate, setProductionDate] = reactExports.useState((/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+  const [productionDate, setProductionDate] = reactExports.useState(todayDdmmyyyy());
   const [isRecurring, setIsRecurring] = reactExports.useState(false);
   const [remarks, setRemarks] = reactExports.useState("");
   const [items, setItems] = reactExports.useState([createEmptyRow()]);
@@ -14349,30 +14533,15 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
     }
     setItems(newItems);
   };
-  const handleKeyDown = (e, rowIndex, colIndex) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const rowInputs = Array.from(e.currentTarget.parentElement.parentElement.querySelectorAll("input:not([readonly]), select"));
-      const currentIndex = rowInputs.indexOf(e.currentTarget);
-      if (currentIndex === rowInputs.length - 1) {
-        setItems((prev) => [...prev, createEmptyRow()]);
-        setTimeout(() => {
-          const nextRowSelect = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) select`);
-          nextRowSelect?.focus();
-        }, 50);
-      } else {
-        rowInputs[currentIndex + 1]?.focus();
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const nextRowInput = gridRef.current?.querySelector(`tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex + 2}) td:nth-child(${colIndex + 2}) select`);
-      nextRowInput?.focus();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prevRowInput = gridRef.current?.querySelector(`tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) input, tr:nth-child(${rowIndex}) td:nth-child(${colIndex + 2}) select`);
-      prevRowInput?.focus();
-    }
+  const appendRow = () => {
+    setItems((prev) => [...prev, createEmptyRow()]);
+    setTimeout(() => {
+      const rows = gridRef.current?.querySelectorAll("tbody tr");
+      const last = rows?.[rows.length - 1];
+      last?.querySelector("select, input:not([readonly]):not([disabled])")?.focus();
+    }, 30);
   };
+  const handleKeyDown = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
   const removeRow = (index) => {
     if (items.length === 1) {
       setItems([createEmptyRow()]);
@@ -14416,8 +14585,9 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
       setError(err.message || "Failed to save voucher");
     }
   };
+  const inputStyle = { width: "100%", border: "1px solid #d5cfc3", background: "#fff", color: "#4f6166" };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "16px", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "16px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "Issue To Production" }),
@@ -14428,11 +14598,11 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: "16px", marginBottom: "8px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Date" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", value: productionDate, onChange: (e) => setProductionDate(e.target.value) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", value: productionDate, onChange: (e) => setProductionDate(e.target.value) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Voucher No." }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#eee" } })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: voucherNo, readOnly: true, style: { background: "#f2f0ea" } })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", style: { flexDirection: "row", alignItems: "center", gap: "8px", marginTop: "24px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: isRecurring, onChange: (e) => setIsRecurring(e.target.checked), style: { width: "auto" } }),
@@ -14440,8 +14610,8 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, style: { width: "100%", borderCollapse: "collapse" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f9fa", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { flex: 1, padding: "0", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowY: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { ref: gridRef, className: "voucher-grid", style: { width: "100%", borderCollapse: "collapse" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { style: { position: "sticky", top: 0, background: "#f8f8f6", zIndex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "40px" }, children: "#" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "250px" }, children: "Stock Item" }),
         settings.showBatch && /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Batch No." }),
@@ -14453,10 +14623,9 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("tbody", { children: [
         items.map((row, i2) => {
-          let colIdx = 0;
           return /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: i2 + 1 }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, colIdx++), style: { width: "100%", padding: "4px" }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: row.product_id, onChange: (e) => handleRowChange(i2, "product_id", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle, children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "" }),
               products.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: p.id, children: [
                 p.code,
@@ -14464,15 +14633,15 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
                 p.name
               ] }, p.id))
             ] }) }),
-            settings.showBatch && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.batch_no, onChange: (e) => handleRowChange(i2, "batch_no", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, colIdx++), style: { width: "100%", padding: "4px" } }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.issued_qty, onChange: (e) => handleRowChange(i2, "issued_qty", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, colIdx++), style: { width: "100%", padding: "4px" } }) }),
-            settings.showPcs && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.issued_pcs, onChange: (e) => handleRowChange(i2, "issued_pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, colIdx++), style: { width: "100%", padding: "4px" } }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.production_qty, onChange: (e) => handleRowChange(i2, "production_qty", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, colIdx++), style: { width: "100%", padding: "4px" } }) }),
-            settings.showPcs && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: row.production_pcs, onChange: (e) => handleRowChange(i2, "production_pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e, i2, colIdx++), style: { width: "100%", padding: "4px" } }) }),
+            settings.showBatch && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: row.batch_no, onChange: (e) => handleRowChange(i2, "batch_no", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.issued_qty, onChange: (e) => handleRowChange(i2, "issued_qty", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+            settings.showPcs && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.issued_pcs, onChange: (e) => handleRowChange(i2, "issued_pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.production_qty, onChange: (e) => handleRowChange(i2, "production_qty", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
+            settings.showPcs && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: row.production_pcs, onChange: (e) => handleRowChange(i2, "production_pcs", e.target.value), onKeyDown: (e) => handleKeyDown(e), style: inputStyle }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { textAlign: "center" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => removeRow(i2), tabIndex: -1, style: { padding: "2px 6px", background: "transparent", color: "red", border: "none" }, children: "x" }) })
           ] }, row.id);
         }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { style: { background: "#f8f9fa", fontWeight: "bold" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { style: { background: "#f8f8f6", fontWeight: "bold" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: settings.showBatch ? 3 : 2, style: { textAlign: "right", paddingRight: "16px" }, children: "Total:" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { padding: "8px" }, children: totals.issued.toFixed(2) }),
           settings.showPcs && /* @__PURE__ */ jsxRuntimeExports.jsx("td", {}),
@@ -14482,7 +14651,7 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
         ] })
       ] })
     ] }) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { padding: "16px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "24px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", style: { padding: "16px" }, onKeyDown: handleFormKeyNav, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "24px" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: "12px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Remarks" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { value: remarks, onChange: (e) => setRemarks(e.target.value), rows: 2, style: { resize: "vertical" } })
@@ -14512,17 +14681,150 @@ function ProductionVoucherPanel({ products, busy, onSave }) {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Default Issued Qty" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: settings.defaultIssuedQty, onChange: (e) => setSettings((s2) => ({ ...s2, defaultIssuedQty: e.target.value })) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: settings.defaultIssuedQty, onChange: (e) => setSettings((s2) => ({ ...s2, defaultIssuedQty: e.target.value })) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "field", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Default Production Qty" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", value: settings.defaultProductionQty, onChange: (e) => setSettings((s2) => ({ ...s2, defaultProductionQty: e.target.value })) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", value: settings.defaultProductionQty, onChange: (e) => setSettings((s2) => ({ ...s2, defaultProductionQty: e.target.value })) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "secondary", onClick: () => setShowSettings(false), children: "Cancel" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: handleSaveSettings, children: "Save Settings" })
       ] })
     ] }) })
+  ] });
+}
+function buildItemCode(name, size, length) {
+  return [name, size, length].map((value) => (value ?? "").toString().trim()).filter(Boolean).map((value) => value.replace(/\s+/g, "_")).join("/");
+}
+function HsnSelect({ value, onChange, inputStyle }) {
+  const [open, setOpen] = reactExports.useState(false);
+  const [query, setQuery] = reactExports.useState("");
+  const [results, setResults] = reactExports.useState([]);
+  const [active, setActive] = reactExports.useState(0);
+  const wrapRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    const onDocMouseDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+  reactExports.useEffect(() => {
+    if (!open) return void 0;
+    let alive = true;
+    const q = query.trim();
+    const t2 = setTimeout(async () => {
+      try {
+        const rows = await window.stockOps.listMaster("hsn", { search: q, pageSize: 50 });
+        if (alive) {
+          setResults(rows || []);
+          setActive(0);
+        }
+      } catch {
+        if (alive) setResults([]);
+      }
+    }, 150);
+    return () => {
+      alive = false;
+      clearTimeout(t2);
+    };
+  }, [query, open]);
+  const pick = (row) => {
+    onChange(row.code);
+    setOpen(false);
+    setQuery("");
+  };
+  const onKeyDown = (e) => {
+    if (!open) {
+      if (e.key === "ArrowDown") {
+        setOpen(true);
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      e.stopPropagation();
+      setActive((i2) => Math.min(i2 + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      e.stopPropagation();
+      setActive((i2) => Math.max(i2 - 1, 0));
+    } else if (e.key === "Enter") {
+      if (results[active]) {
+        e.preventDefault();
+        e.stopPropagation();
+        pick(results[active]);
+      }
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      setOpen(false);
+      setQuery("");
+    }
+  };
+  const display = open ? query : value || "";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref: wrapRef, style: { position: "relative" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "input",
+      {
+        value: display,
+        placeholder: value ? value : "Search HSN…",
+        onChange: (e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        },
+        onFocus: () => setOpen(true),
+        onKeyDown,
+        style: inputStyle
+      }
+    ),
+    open ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "ul",
+      {
+        style: {
+          position: "absolute",
+          zIndex: 30,
+          top: "100%",
+          left: 0,
+          right: 0,
+          margin: 0,
+          padding: 0,
+          listStyle: "none",
+          maxHeight: "260px",
+          overflowY: "auto",
+          background: "#ffffff",
+          border: "1px solid #d5cfc3",
+          borderRadius: "8px",
+          boxShadow: "0 8px 24px rgba(47,58,61,0.14)"
+        },
+        children: results.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("li", { style: { padding: "8px 10px", opacity: 0.6 }, children: query.trim() ? "No matches" : "Type to search…" }) : results.map((row, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "li",
+          {
+            onMouseDown: () => pick(row),
+            onMouseEnter: () => setActive(i2),
+            style: {
+              padding: "7px 10px",
+              cursor: "pointer",
+              color: "#4f6166",
+              background: i2 === active ? "#f2f0ea" : "transparent"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: row.code }),
+              row.description ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { opacity: 0.7 }, children: [
+                " — ",
+                row.description
+              ] }) : null
+            ]
+          },
+          row.id
+        ))
+      }
+    ) : null
   ] });
 }
 const stockMasterSchema = objectType({
@@ -14542,10 +14844,13 @@ const stockMasterSchema = objectType({
   description: stringType().optional().default(""),
   opening_qty: coerce.number().min(0).default(0),
   opening_date: stringType().optional().default(""),
-  isi_mark: booleanType().default(false)
+  isi_mark: enumType(["yes", "no"]).default("no")
 });
 function todayDateInputValue() {
-  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const d = /* @__PURE__ */ new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 function getDefaultValues() {
   return {
@@ -14565,22 +14870,34 @@ function getDefaultValues() {
     description: "",
     opening_qty: 0,
     opening_date: todayDateInputValue(),
-    isi_mark: false
+    isi_mark: "no"
   };
 }
-function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdate, onDelete, busy }) {
+function StockMasterPanel({ products, categories, units, onCreate, onUpdate, onDelete, busy }) {
   const [showForm, setShowForm] = reactExports.useState(true);
   const [editingId, setEditingId] = reactExports.useState(null);
   const [groupFilter, setGroupFilter] = reactExports.useState("all");
+  const [codeTouched, setCodeTouched] = reactExports.useState(false);
+  const [formError, setFormError] = reactExports.useState(null);
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors }
   } = useForm({
     resolver: t(stockMasterSchema),
     defaultValues: getDefaultValues()
   });
+  const watchedName = watch("name");
+  const watchedSize = watch("size");
+  const watchedLength = watch("length");
+  reactExports.useEffect(() => {
+    if (!editingId && !codeTouched) {
+      setValue("code", buildItemCode(watchedName, watchedSize, watchedLength));
+    }
+  }, [watchedName, watchedSize, watchedLength, editingId, codeTouched, setValue]);
   const categoryMap = reactExports.useMemo(() => {
     const map = /* @__PURE__ */ new Map();
     categories.forEach((category) => map.set(String(category.id), category.name));
@@ -14613,24 +14930,33 @@ function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdat
       batch_no: values.batch_no.trim() || null,
       description: values.description.trim() || null,
       opening_stock_date: values.opening_date || null,
-      isi_mark: Boolean(values.isi_mark),
+      isi_mark: values.isi_mark === "yes",
       is_active: true,
       // Transient — consumed by App to record the opening-balance stock movement.
       opening_qty: Number(values.opening_qty),
       opening_rate: Number(values.purchase_rate),
       opening_date: values.opening_date || todayDateInputValue()
     };
-    if (editingId) {
-      await onUpdate(editingId, payload);
-    } else {
-      await onCreate(payload);
+    setFormError(null);
+    try {
+      if (editingId) {
+        await onUpdate(editingId, payload);
+      } else {
+        await onCreate(payload);
+      }
+    } catch (err) {
+      const clean = (err?.message || "Unable to save item").replace(/^Error invoking remote method '[^']*':\s*/, "").replace(/^AppError:\s*/, "");
+      setFormError(clean);
+      return;
     }
     setEditingId(null);
+    setCodeTouched(false);
     reset(getDefaultValues());
   };
   const startEdit = (row) => {
     setEditingId(row.id);
     setShowForm(true);
+    setCodeTouched(true);
     reset({
       name: row.name ?? "",
       code: row.code ?? "",
@@ -14648,11 +14974,13 @@ function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdat
       description: row.description ?? "",
       opening_qty: 0,
       opening_date: row.opening_stock_date || todayDateInputValue(),
-      isi_mark: Boolean(row.isi_mark)
+      isi_mark: row.isi_mark ? "yes" : "no"
     });
   };
   const cancelEdit = () => {
     setEditingId(null);
+    setCodeTouched(false);
+    setFormError(null);
     reset(getDefaultValues());
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "stock-master-view", children: [
@@ -14668,16 +14996,12 @@ function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdat
     ] }),
     showForm ? /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel stock-form-panel", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: editingId ? "Edit Item" : "New Item" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "stock-grid-form", onSubmit: handleSubmit(submit), children: [
+      formError ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: formError }) : null,
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "stock-grid-form", onSubmit: handleSubmit(submit), onKeyDown: handleFormKeyNav, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Stock Name",
           /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("name") }),
           errors.name ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.name.message }) : null
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-          "Item Code",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("code"), placeholder: "Auto if empty" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "stock-hint", children: "Unique. Auto-generated, can be overridden." })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Group",
@@ -14688,13 +15012,8 @@ function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdat
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "HSN Code",
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { ...register("hsn"), children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Select" }),
-            hsns.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: item.code, children: [
-              item.code,
-              item.description ? ` — ${item.description}` : ""
-            ] }, item.id))
-          ] })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(HsnSelect, { value: watch("hsn"), onChange: (code) => setValue("hsn", code, { shouldDirty: true }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "hidden", ...register("hsn") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "UOM",
@@ -14720,19 +15039,19 @@ function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdat
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "GST Rate (%)",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.01", ...register("gst_rate") })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", step: "0.01", ...register("gst_rate") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Sale Rate",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.01", ...register("sale_rate") })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", step: "0.01", ...register("sale_rate") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Purchase Rate",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.01", ...register("purchase_rate") })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", step: "0.01", ...register("purchase_rate") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Size Difference",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.01", ...register("size_diff") })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", step: "0.01", ...register("size_diff") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Batch No.",
@@ -14740,19 +15059,33 @@ function StockMasterPanel({ products, categories, units, hsns, onCreate, onUpdat
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Opening Stock Qty",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "number", step: "0.001", ...register("opening_qty") })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", inputMode: "decimal", step: "0.001", ...register("opening_qty") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           "Opening Stock Date",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "date", ...register("opening_date") })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "text", placeholder: "dd/mm/yyyy", ...register("opening_date") })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { gridColumn: "span 2" }, children: [
           "General Description",
           /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("description") })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "checkbox-label", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", ...register("isi_mark") }),
-          "ISI Marked"
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "ISI Marked",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { ...register("isi_mark"), children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "no", children: "No" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "yes", children: "Yes" })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { gridColumn: "span 2" }, children: [
+          "Item Code",
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              ...register("code", { onChange: () => setCodeTouched(true) }),
+              placeholder: "Auto from name / size / length"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "stock-hint", children: "Auto-generated as name/size/length. Unique, can be overridden." })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stock-form-actions", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", disabled: busy, children: editingId ? "Update Item" : "Save Item" }),
@@ -14805,7 +15138,7 @@ const partySchema = objectType({
   pin_code: stringType().optional().nullable(),
   gstin: stringType().regex(/^[0-9A-Z]{15}$/, "GST No. must be 15 uppercase letters/digits").optional().or(literalType(""))
 });
-const defaultValues$1 = {
+const defaultValues = {
   name: "",
   code: "",
   mobile: "",
@@ -14827,7 +15160,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
     formState: { errors }
   } = useForm({
     resolver: t(partySchema),
-    defaultValues: defaultValues$1
+    defaultValues
   });
   const generateCode = async () => {
     try {
@@ -14858,7 +15191,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
   };
   const onCancel = () => {
     setEditingId(null);
-    reset(defaultValues$1);
+    reset(defaultValues);
     generateCode();
     setError(null);
   };
@@ -14884,16 +15217,12 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
       setError(err.message || "Failed to delete party");
     }
   };
-  const handleKeyDown = (e, nextFieldId) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (nextFieldId) {
-        document.getElementById(nextFieldId)?.focus();
-      } else {
-        handleSubmit(onSubmit)();
-      }
-    }
-  };
+  const handleKeyDown = (e) => handleFormKeyNav({
+    key: e.key,
+    target: e.target,
+    currentTarget: e.target.closest("form"),
+    preventDefault: () => e.preventDefault()
+  });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "party-master-view", style: { display: "flex", flexDirection: "column", gap: "20px" }, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: editingId ? "Edit Party" : "Create Party" }),
@@ -14907,7 +15236,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-gstin",
                 ...register("gstin"),
-                onKeyDown: (e) => handleKeyDown(e, "party-address"),
+                onKeyDown: (e) => handleKeyDown(e),
                 placeholder: "Enter GST Number"
               }
             ),
@@ -14920,7 +15249,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-address",
                 ...register("address"),
-                onKeyDown: (e) => handleKeyDown(e, "party-district")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.address && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.address.message })
@@ -14932,7 +15261,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-district",
                 ...register("district"),
-                onKeyDown: (e) => handleKeyDown(e, "party-pin")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.district && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.district.message })
@@ -14944,7 +15273,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-pin",
                 ...register("pin_code"),
-                onKeyDown: (e) => handleKeyDown(e, "party-name")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.pin_code && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.pin_code.message })
@@ -14962,7 +15291,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
                 id: "party-name",
                 autoFocus: true,
                 ...register("name"),
-                onKeyDown: (e) => handleKeyDown(e, "party-city")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.name && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.name.message })
@@ -14974,7 +15303,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-city",
                 ...register("city"),
-                onKeyDown: (e) => handleKeyDown(e, "party-state")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.city && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.city.message })
@@ -14986,7 +15315,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-state",
                 ...register("state"),
-                onKeyDown: (e) => handleKeyDown(e, "party-mobile")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.state && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.state.message })
@@ -14998,7 +15327,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-mobile",
                 ...register("mobile"),
-                onKeyDown: (e) => handleKeyDown(e, "party-code")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.mobile && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.mobile.message })
@@ -15015,7 +15344,7 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
               {
                 id: "party-code",
                 ...register("code"),
-                onKeyDown: (e) => handleKeyDown(e, "party-submit")
+                onKeyDown: (e) => handleKeyDown(e)
               }
             ),
             errors.code && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.code.message }),
@@ -15054,94 +15383,169 @@ function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
     ] })
   ] });
 }
-const hsnSchema = objectType({
-  code: stringType().min(1, "HSN code is required"),
-  description: stringType().optional().nullable()
-});
-const defaultValues = { code: "", description: "" };
-function HsnMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
+function MasterSection({ title, entity, fields, onRefresh, searchable = false, staticRows = [] }) {
+  const emptyForm = () => Object.fromEntries(fields.map((f) => [f.key, ""]));
+  const [form, setForm] = reactExports.useState(emptyForm);
   const [editingId, setEditingId] = reactExports.useState(null);
+  const [busy, setBusy] = reactExports.useState(false);
   const [error, setError] = reactExports.useState(null);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors }
-  } = useForm({ resolver: t(hsnSchema), defaultValues });
+  const [search, setSearch] = reactExports.useState("");
+  const [fetched, setFetched] = reactExports.useState([]);
+  const reloadSearch = reactExports.useCallback(async () => {
+    if (!searchable) return;
+    try {
+      setFetched(await window.stockOps.listMaster(entity, { search: search.trim(), pageSize: 50 }));
+    } catch {
+      setFetched([]);
+    }
+  }, [searchable, entity, search]);
+  reactExports.useEffect(() => {
+    if (!searchable) return void 0;
+    const t2 = setTimeout(reloadSearch, 150);
+    return () => clearTimeout(t2);
+  }, [reloadSearch, searchable]);
+  const rows = searchable ? fetched : staticRows;
+  const afterChange = async () => {
+    if (searchable) await reloadSearch();
+    else await onRefresh();
+  };
+  const reset = () => {
+    setForm(emptyForm());
+    setEditingId(null);
+    setError(null);
+  };
   const startEdit = (row) => {
     setEditingId(row.id);
-    reset({ code: row.code ?? "", description: row.description ?? "" });
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    reset(defaultValues);
+    setForm(Object.fromEntries(fields.map((f) => [f.key, row[f.key] ?? ""])));
     setError(null);
   };
-  const submit = async (values) => {
-    setError(null);
-    try {
-      if (editingId) {
-        await onUpdate(editingId, values);
-      } else {
-        await onCreate(values);
+  const submit = async (e) => {
+    e.preventDefault();
+    for (const f of fields) {
+      if (f.required && !String(form[f.key] || "").trim()) {
+        setError(`${f.label} is required`);
+        return;
       }
-      cancelEdit();
-    } catch (err) {
-      setError(err.message || "Failed to save HSN code");
     }
-  };
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this HSN code?")) return;
+    setBusy(true);
+    setError(null);
     try {
-      await onDelete(id);
-      if (editingId === id) cancelEdit();
+      const payload = {};
+      for (const f of fields) payload[f.key] = form[f.key];
+      if (editingId) {
+        await window.stockOps.updateMaster(entity, editingId, payload);
+      } else {
+        await window.stockOps.createMaster(entity, payload);
+      }
+      reset();
+      await afterChange();
     } catch (err) {
-      setError(err.message || "Failed to delete HSN code");
+      const clean = (err?.message || "Save failed").replace(/^Error invoking remote method '[^']*':\s*/, "").replace(/^AppError:\s*/, "");
+      setError(clean);
+    } finally {
+      setBusy(false);
     }
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "hsn-master-view", style: { display: "grid", gap: "16px" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: editingId ? "Edit HSN Code" : "New HSN Code" }),
-      error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: error }) : null,
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "inline-form", onSubmit: handleSubmit(submit), children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-          "HSN Code",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("code"), placeholder: "e.g. 7208" }),
-          errors.code ? /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: errors.code.message }) : null
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-          "Description",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { ...register("description"), placeholder: "Optional" })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "8px", alignItems: "end" }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", disabled: busy, children: editingId ? "Update" : "Save" }),
-          editingId ? /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: cancelEdit, children: "Cancel" }) : null
-        ] })
+  const remove = async (id) => {
+    if (!window.confirm(`Delete this ${title.replace(/s$/, "").toLowerCase()}?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await window.stockOps.deleteMaster(entity, id);
+      if (editingId === id) reset();
+      await afterChange();
+    } catch (err) {
+      setError(err?.message || "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: editingId ? `Edit ${title}` : title }),
+    error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: error }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "inline-form", onSubmit: submit, onKeyDown: handleFormKeyNav, children: [
+      fields.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+        f.label,
+        f.required ? " *" : "",
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            value: form[f.key],
+            placeholder: f.placeholder || "",
+            onChange: (e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))
+          }
+        )
+      ] }, f.key)),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "8px", alignItems: "end" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", disabled: busy, children: editingId ? "Update" : "Add" }),
+        editingId ? /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: reset, children: "Cancel" }) : null
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "panel", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { children: [
-        "HSN Codes (",
-        rows.length,
-        ")"
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Code" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Description" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "140px" }, children: "Action" })
-        ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: rows.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 3, children: "No HSN codes yet." }) }) : rows.map((row) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.code }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.description || "-" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "action-row", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => startEdit(row), children: "Edit" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "danger-btn", onClick: () => handleDelete(row.id), children: "Delete" })
-          ] }) })
-        ] }, row.id)) })
-      ] })
-    ] })
+    searchable ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "input",
+      {
+        value: search,
+        onChange: (e) => setSearch(e.target.value),
+        placeholder: "Search HSN code or description…",
+        style: { marginTop: "14px", width: "100%", padding: "8px 10px", border: "1px solid #d5cfc3", borderRadius: "8px" }
+      }
+    ) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { style: { marginTop: "12px" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        fields.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: f.label }, f.key)),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("th", { style: { width: "140px" }, children: "Action" })
+      ] }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: rows.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: fields.length + 1, children: searchable && search ? "No matches." : "No entries yet." }) }) : rows.map((row) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+        fields.map((f) => /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row[f.key] || "-" }, f.key)),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "action-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => startEdit(row), children: "Edit" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "danger-btn", onClick: () => remove(row.id), children: "Delete" })
+        ] }) })
+      ] }, row.id)) })
+    ] }),
+    searchable ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "stock-hint", style: { marginTop: "8px" }, children: "Showing up to 50 results — type above to narrow the ~21,000 HSN codes." }) : null
   ] });
+}
+function CodesUnitsPanel({ units, onRefresh }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      style: {
+        display: "grid",
+        gap: "16px",
+        gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+        alignItems: "start"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          MasterSection,
+          {
+            title: "HSN Codes",
+            entity: "hsn",
+            searchable: true,
+            onRefresh,
+            fields: [
+              { key: "code", label: "HSN Code", required: true, placeholder: "e.g. 7208" },
+              { key: "description", label: "Description", placeholder: "Optional" }
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          MasterSection,
+          {
+            title: "Units (UOM)",
+            entity: "unit",
+            staticRows: units,
+            onRefresh,
+            fields: [
+              { key: "name", label: "Unit Name", required: true, placeholder: "e.g. Kilogram" },
+              { key: "symbol", label: "Symbol", placeholder: "e.g. kg" }
+            ]
+          }
+        )
+      ]
+    }
+  );
 }
 function ItemLedgerPanel({ products }) {
   const [selectedProductId, setSelectedProductId] = reactExports.useState("");
@@ -15367,7 +15771,6 @@ function App() {
     parties,
     categories,
     units,
-    hsns,
     busy,
     error,
     setBootstrapStatus,
@@ -15379,7 +15782,6 @@ function App() {
     setParties,
     setCategories,
     setUnits,
-    setHsns,
     setBusy,
     setError
   } = useSessionStore();
@@ -15395,12 +15797,11 @@ function App() {
     setVouchers(recent);
   };
   const refreshMasters = async () => {
-    const [productRows, partyRows, categoryRows, unitRows, hsnRows] = await Promise.all([
+    const [productRows, partyRows, categoryRows, unitRows] = await Promise.all([
       window.stockOps.listMaster("product", {}),
       window.stockOps.listMaster("party", {}),
       window.stockOps.listMaster("category", {}),
-      window.stockOps.listMaster("unit", {}),
-      window.stockOps.listMaster("hsn", {})
+      window.stockOps.listMaster("unit", { pageSize: 1e3 })
     ]);
     const productsWithStock = await Promise.all(
       productRows.map(async (row) => {
@@ -15412,7 +15813,6 @@ function App() {
     setParties(partyRows);
     setCategories(categoryRows);
     setUnits(unitRows);
-    setHsns(hsnRows);
   };
   reactExports.useEffect(() => {
     if (!user) {
@@ -15456,9 +15856,7 @@ function App() {
     try {
       await window.stockOps.createMaster(entity, payload);
       await refreshMasters();
-      if (entity === "product") {
-        await refreshDashboard();
-      }
+      if (entity === "product") ;
     } catch (createError) {
       setError(createError.message || "Unable to create record");
     } finally {
@@ -15481,11 +15879,7 @@ function App() {
     setBusy(true);
     setError(null);
     try {
-      const productPayload = {
-        ...payload,
-        code: payload.code || `ITM-${Date.now().toString().slice(-6)}`
-      };
-      const created = await window.stockOps.createMaster("product", productPayload);
+      const created = await window.stockOps.createMaster("product", payload);
       if (Number(payload.opening_qty || 0) > 0) {
         await window.stockOps.recordStockTransaction({
           transaction_no: `OB-${Date.now()}`,
@@ -15505,6 +15899,7 @@ function App() {
       await Promise.all([refreshMasters(), refreshDashboard()]);
     } catch (createError) {
       setError(createError.message || "Unable to create product");
+      throw createError;
     } finally {
       setBusy(false);
     }
@@ -15513,13 +15908,11 @@ function App() {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.updateMaster("product", id, {
-        ...payload,
-        code: payload.code || `ITM-${String(id).padStart(4, "0")}`
-      });
+      await window.stockOps.updateMaster("product", id, payload);
       await Promise.all([refreshMasters(), refreshDashboard()]);
     } catch (updateError) {
       setError(updateError.message || "Unable to update product");
+      throw updateError;
     } finally {
       setBusy(false);
     }
@@ -15610,7 +16003,6 @@ function App() {
           products,
           categories,
           units,
-          hsns,
           busy,
           onCreate: createProduct,
           onUpdate: updateProduct,
@@ -15630,17 +16022,8 @@ function App() {
         }
       );
     }
-    if (activeView === "hsn-master") {
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        HsnMasterPanel,
-        {
-          rows: hsns,
-          busy,
-          onCreate: (values) => createMaster("hsn", values),
-          onUpdate: (id, values) => updateMasterRecord("hsn", id, values),
-          onDelete: (id) => deleteMaster("hsn", id)
-        }
-      );
+    if (activeView === "codes-units") {
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(CodesUnitsPanel, { units, onRefresh: refreshMasters });
     }
     if (activeView === "purchase-entry") {
       return /* @__PURE__ */ jsxRuntimeExports.jsx(

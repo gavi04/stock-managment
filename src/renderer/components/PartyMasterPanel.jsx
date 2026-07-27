@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { handleFormKeyNav } from '../utils/formKeyNav.js';
 
 const partySchema = z.object({
   id: z.number().optional(),
@@ -108,18 +109,15 @@ export function PartyMasterPanel({ rows, busy, onCreate, onUpdate, onDelete }) {
     }
   };
 
-  // Helper for keyboard navigation
-  const handleKeyDown = (e, nextFieldId) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (nextFieldId) {
-        document.getElementById(nextFieldId)?.focus();
-      } else {
-        // if no next field, perhaps submit form
-        handleSubmit(onSubmit)();
-      }
-    }
-  };
+  // Enter / arrow-key field navigation, scoped to the surrounding form.
+  // (The per-field second argument is now ignored.)
+  const handleKeyDown = (e) =>
+    handleFormKeyNav({
+      key: e.key,
+      target: e.target,
+      currentTarget: e.target.closest('form'),
+      preventDefault: () => e.preventDefault()
+    });
 
   return (
     <div className="party-master-view" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BaseCrudService } from './baseCrudService.js';
+import { buildItemCode } from '../../shared/itemCode.js';
 import {
   categoriesRepository,
   hsnRepository,
@@ -32,6 +33,29 @@ const hsnCreateSchema = z.object({
 });
 
 const hsnUpdateSchema = hsnCreateSchema.partial();
+
+// Unit (UOM) master: name + optional symbol; code auto-generated from the name.
+const unitCreateSchema = z.object({
+  name: z.string().min(1),
+  symbol: z.string().optional().nullable(),
+  code: z.string().optional().nullable()
+});
+
+const unitUpdateSchema = unitCreateSchema.partial();
+
+class UnitService extends BaseCrudService {
+  create(payload) {
+    if (!payload.code) {
+      const slug = String(payload.name || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      payload.code = slug ? `UOM-${slug}` : `UOM-${Date.now().toString().slice(-6)}`;
+    }
+    return super.create(payload);
+  }
+}
 
 const partyCreateSchema = z.object({
   name: z.string().min(1),
@@ -98,20 +122,16 @@ const productCreateSchema = z.object({
 const productUpdateSchema = productCreateSchema.partial();
 
 class ProductService extends BaseCrudService {
-  getNextCode() {
-    return `ITM-${Date.now().toString().slice(-6)}`;
-  }
-
   create(payload) {
     if (!payload.code) {
-      payload.code = this.getNextCode();
+      payload.code = buildItemCode(payload.name, payload.size, payload.length) || `ITM-${Date.now().toString().slice(-6)}`;
     }
     return super.create(payload);
   }
 }
 
 export const categoryService = new BaseCrudService(categoriesRepository, 'Category', commonCreateSchema, commonUpdateSchema);
-export const unitService = new BaseCrudService(unitsRepository, 'Unit', commonCreateSchema, commonUpdateSchema);
+export const unitService = new UnitService(unitsRepository, 'Unit', unitCreateSchema, unitUpdateSchema);
 export const hsnService = new BaseCrudService(hsnRepository, 'HSN', hsnCreateSchema, hsnUpdateSchema);
 export const partyService = new PartyService(partiesRepository, 'Party', partyCreateSchema, partyUpdateSchema);
 export const warehouseService = new BaseCrudService(warehousesRepository, 'Warehouse', warehouseCreateSchema, warehouseUpdateSchema);
