@@ -389,7 +389,11 @@ export class VoucherService {
           }
         });
 
-        if (Number(item.issued_qty) > 0) {
+        // Move stock by the item's basis: quantity if given, otherwise pcs.
+        const issuedMove = Number(item.issued_qty) > 0 ? Number(item.issued_qty) : Number(item.issued_pcs) || 0;
+        const producedMove = Number(item.production_qty) > 0 ? Number(item.production_qty) : Number(item.production_pcs) || 0;
+
+        if (issuedMove > 0) {
           // Negative quantity for issued (raw material goes out)
           await tx.stockTransaction.create({
             data: {
@@ -399,7 +403,7 @@ export class VoucherService {
               transactionType: 'production_out',
               productId: Number(item.product_id),
               warehouseId,
-              quantity: -Math.abs(Number(item.issued_qty)),
+              quantity: -Math.abs(issuedMove),
               rate: 0,
               amount: 0,
               notes: payload.remarks
@@ -407,7 +411,7 @@ export class VoucherService {
           });
         }
 
-        if (Number(item.production_qty) > 0) {
+        if (producedMove > 0) {
           // Positive quantity for produced (finished goods come in)
           await tx.stockTransaction.create({
             data: {
@@ -417,7 +421,7 @@ export class VoucherService {
               transactionType: 'production_in',
               productId: Number(item.product_id),
               warehouseId,
-              quantity: Math.abs(Number(item.production_qty)),
+              quantity: Math.abs(producedMove),
               rate: 0,
               amount: 0,
               notes: payload.remarks

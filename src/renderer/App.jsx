@@ -14,6 +14,7 @@ import { ProductionVoucherPanel } from './components/ProductionVoucherPanel.jsx'
 import { StockMasterPanel } from './components/StockMasterPanel.jsx';
 import { PartyMasterPanel } from './components/PartyMasterPanel.jsx';
 import { CodesUnitsPanel } from './components/CodesUnitsPanel.jsx';
+import { ProductionFormulaPanel } from './components/ProductionFormulaPanel.jsx';
 import { ItemLedgerPanel } from './components/ItemLedgerPanel.jsx';
 import { DailyStockSummaryPanel } from './components/DailyStockSummaryPanel.jsx';
 
@@ -28,6 +29,7 @@ export default function App() {
     parties,
     categories,
     units,
+    formulas,
     busy,
     error,
     setBootstrapStatus,
@@ -39,6 +41,7 @@ export default function App() {
     setParties,
     setCategories,
     setUnits,
+    setFormulas,
     setBusy,
     setError
   } = useSessionStore();
@@ -58,11 +61,12 @@ export default function App() {
 
   const refreshMasters = async () => {
     // HSN (~21k) is not loaded up-front; it's searched on demand in the pickers.
-    const [productRows, partyRows, categoryRows, unitRows] = await Promise.all([
+    const [productRows, partyRows, categoryRows, unitRows, formulaRows] = await Promise.all([
       window.stockOps.listMaster('product', {}),
       window.stockOps.listMaster('party', {}),
       window.stockOps.listMaster('category', {}),
-      window.stockOps.listMaster('unit', { pageSize: 1000 })
+      window.stockOps.listMaster('unit', { pageSize: 1000 }),
+      window.stockOps.listMaster('formula', { pageSize: 1000 })
     ]);
 
     const productsWithStock = await Promise.all(
@@ -76,6 +80,7 @@ export default function App() {
     setParties(partyRows);
     setCategories(categoryRows);
     setUnits(unitRows);
+    setFormulas(formulaRows);
   };
 
   useEffect(() => {
@@ -338,6 +343,10 @@ export default function App() {
       return <CodesUnitsPanel units={units} onRefresh={refreshMasters} />;
     }
 
+    if (activeView === 'production-formula') {
+      return <ProductionFormulaPanel formulas={formulas} products={products} onRefresh={refreshMasters} />;
+    }
+
     if (activeView === 'purchase-entry') {
       return (
         <PurchaseVoucherPanel
@@ -382,10 +391,11 @@ export default function App() {
       );
     }
 
-    if (activeView === 'production-entry' || activeView === 'issue-production') {
+    if (activeView === 'production-entry') {
       return (
         <ProductionVoucherPanel
           products={products}
+          formulas={formulas}
           busy={busy}
           onSave={postProductionVoucher}
         />

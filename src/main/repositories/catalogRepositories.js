@@ -6,3 +6,4 @@ export const warehousesRepository = new LookupRepository('warehouse');
 export const partiesRepository = new LookupRepository('party');
 export const productsRepository = new LookupRepository('product');
 export const hsnRepository = new LookupRepository('hsn', ['code', 'description']);
+export const productionFormulasRepository = new LookupRepository('productionFormula', ['name', 'code']);

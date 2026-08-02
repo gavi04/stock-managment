@@ -106,6 +106,20 @@ model Hsn {
   @@map("hsn_codes")
 }
 
+// A production recipe: fixed-ratio issued (raw) and produced (finished) items.
+// lines_json is a JSON array of { product_id, kind: 'issue'|'produce', quantity, pcs }.
+model ProductionFormula {
+  id        Int       @id @default(autoincrement())
+  name      String
+  code      String    @unique
+  linesJson String    @default("[]") @map("lines_json")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("production_formulas")
+}
+
 model Warehouse {
   id        Int       @id @default(autoincrement())
   name      String    @unique

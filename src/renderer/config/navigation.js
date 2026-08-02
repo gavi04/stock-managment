@@ -8,24 +8,27 @@ export const NAVIGATION = [
     items: [
       { key: 'stock-master', label: 'Stock Master' },
       { key: 'party-master', label: 'Party Master' },
-      { key: 'codes-units', label: 'Codes & Units' }
+      { key: 'codes-units', label: 'Codes & Units' },
+      { key: 'production-formula', label: 'Production Formulas' }
     ]
   },
   {
     title: 'Stock-In',
     items: [
       { key: 'purchase-entry', label: 'Purchase Entry' },
-      { key: 'sale-return-entry', label: 'Sale Return Entry' },
-      { key: 'production-entry', label: 'Production Entry' }
+      { key: 'sale-return-entry', label: 'Sale Return Entry' }
     ]
   },
   {
     title: 'Stock-Out',
     items: [
       { key: 'sale-entry', label: 'Sale Entry' },
-      { key: 'purchase-return-entry', label: 'Purchase Return Entry' },
-      { key: 'issue-production', label: 'Issue to Production' }
+      { key: 'purchase-return-entry', label: 'Purchase Return Entry' }
     ]
+  },
+  {
+    title: 'Manufacturing',
+    items: [{ key: 'production-entry', label: 'Production' }]
   },
   {
     title: 'Reports',
@@ -41,12 +44,12 @@ export const VIEW_LABELS = {
   'stock-master': 'Stock Master',
   'party-master': 'Party Master',
   'codes-units': 'Codes & Units',
+  'production-formula': 'Production Formulas',
   'purchase-entry': 'Purchase Entry',
   'sale-return-entry': 'Sale Return Entry',
-  'production-entry': 'Production Entry',
+  'production-entry': 'Production',
   'sale-entry': 'Sale Entry',
   'purchase-return-entry': 'Purchase Return Entry',
-  'issue-production': 'Issue To Production',
   'daily-stock-summary': 'Daily Stock Summary',
   'item-stock-ledger': 'Item Stock Ledger'
 };

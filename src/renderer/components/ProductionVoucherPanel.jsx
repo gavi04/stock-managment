@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { handleGridKeyNav } from '../utils/gridKeyNav.js';
-import { todayDdmmyyyy } from '../utils/dateFormat.js';
 import { handleFormKeyNav } from '../utils/formKeyNav.js';
+import { todayDdmmyyyy } from '../utils/dateFormat.js';
 
-function createEmptyRow() {
+// A single row holds both the issued (raw material) and produced (finished goods)
+// amounts for a stock item. `base` is set only when the row came from a formula,
+// and remembers the ratio numbers so the voucher can be scaled.
+function emptyRow() {
   return {
     id: Date.now() + Math.random(),
     product_id: '',
@@ -11,260 +14,277 @@ function createEmptyRow() {
     issued_qty: '',
     issued_pcs: '',
     production_qty: '',
-    production_pcs: ''
+    production_pcs: '',
+    base: null // { kind: 'issue'|'produce', qty, pcs }
   };
 }
 
-export function ProductionVoucherPanel({ products, busy, onSave }) {
+function fmt(n) {
+  const r = Math.round((Number(n) || 0) * 1000) / 1000;
+  return Number.isFinite(r) ? String(r) : '';
+}
+
+const inputStyle = { width: '100%', border: '1px solid #d5cfc3', background: '#fff', color: '#4f6166' };
+const issuedBorder = { borderLeft: '2px solid #d5cfc3' };
+const producedBorder = { borderLeft: '2px solid #c8b27a' };
+
+export function ProductionVoucherPanel({ products, formulas = [], busy, onSave }) {
   const [voucherNo, setVoucherNo] = useState('');
   const [productionDate, setProductionDate] = useState(todayDdmmyyyy());
   const [isRecurring, setIsRecurring] = useState(false);
   const [remarks, setRemarks] = useState('');
-  
-  const [items, setItems] = useState([createEmptyRow()]);
+  const [formulaId, setFormulaId] = useState('');
+  const [multiplier, setMultiplier] = useState('1');
+
+  const [items, setItems] = useState([emptyRow()]);
   const [error, setError] = useState(null);
-
-  // Settings State
-  const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState({
-    showBatch: true,
-    showPcs: true,
-    defaultIssuedQty: '',
-    defaultProductionQty: ''
-  });
-
   const gridRef = useRef(null);
 
   useEffect(() => {
     window.stockOps.getNextProductionVoucherNo().then(setVoucherNo).catch(console.error);
-    window.stockOps.getProductionSettings().then(savedSettings => {
-      if (Object.keys(savedSettings).length > 0) {
-        setSettings(prev => ({ ...prev, ...savedSettings }));
-      }
-    }).catch(console.error);
   }, []);
 
-  const handleSaveSettings = async () => {
-    try {
-      await window.stockOps.updateProductionSettings(settings);
-      setShowSettings(false);
-    } catch (err) {
-      console.error('Failed to save settings', err);
+  // Scale every formula-derived row (base != null) by a factor.
+  const scaleRowsBy = (factor) => {
+    setItems((prev) =>
+      prev.map((r) => {
+        if (!r.base) return r;
+        const q = fmt(Number(r.base.qty) * factor);
+        const p = r.base.pcs ? fmt(Number(r.base.pcs) * factor) : '';
+        return r.base.kind === 'issue'
+          ? { ...r, issued_qty: q, issued_pcs: p }
+          : { ...r, production_qty: q, production_pcs: p };
+      })
+    );
+  };
+
+  const applyFormula = (fid) => {
+    setFormulaId(fid);
+    setMultiplier('1');
+    const f = formulas.find((x) => String(x.id) === String(fid));
+    if (!f) {
+      setItems([emptyRow()]);
+      return;
     }
+    const rows = (f.lines || []).map((l) => {
+      const base = { kind: l.kind, qty: Number(l.quantity) || 0, pcs: Number(l.pcs) || 0 };
+      const q = fmt(l.quantity);
+      const p = l.pcs ? fmt(l.pcs) : '';
+      const row = { ...emptyRow(), id: Date.now() + Math.random(), product_id: String(l.product_id), base };
+      return l.kind === 'issue'
+        ? { ...row, issued_qty: q, issued_pcs: p }
+        : { ...row, production_qty: q, production_pcs: p };
+    });
+    setItems(rows.length ? rows : [emptyRow()]);
   };
 
-  const handleRowChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
+  const onMultiplierChange = (v) => {
+    setMultiplier(v);
+    scaleRowsBy(Number(v) || 0);
+  };
 
-    if (field === 'product_id' && value) {
-      if (settings.defaultIssuedQty && !newItems[index].issued_qty) {
-        newItems[index].issued_qty = settings.defaultIssuedQty;
-      }
-      if (settings.defaultProductionQty && !newItems[index].production_qty) {
-        newItems[index].production_qty = settings.defaultProductionQty;
-      }
+  const changeField = (idx, field, value) => {
+    const row = items[idx];
+    // Editing the Qty of a formula row rescales everything to keep the fixed ratio.
+    const isIssueQtyEdit = field === 'issued_qty' && row.base?.kind === 'issue' && Number(row.base.qty) > 0;
+    const isProdQtyEdit = field === 'production_qty' && row.base?.kind === 'produce' && Number(row.base.qty) > 0;
+    if (isIssueQtyEdit || isProdQtyEdit) {
+      const factor = (Number(value) || 0) / Number(row.base.qty);
+      setMultiplier(fmt(factor));
+      scaleRowsBy(factor);
+      return;
     }
-
-    setItems(newItems);
+    setItems((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
   };
 
-  const appendRow = () => {
-    setItems(prev => [...prev, createEmptyRow()]);
-    setTimeout(() => {
-      const rows = gridRef.current?.querySelectorAll('tbody tr');
-      const last = rows?.[rows.length - 1];
-      last?.querySelector('select, input:not([readonly]):not([disabled])')?.focus();
-    }, 30);
-  };
+  const appendRow = () => setItems((prev) => [...prev, emptyRow()]);
+  const removeRow = (idx) => setItems((prev) => (prev.length === 1 ? [emptyRow()] : prev.filter((_, i) => i !== idx)));
+  const onGridKey = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
 
-  // Full up/down/left/right grid navigation; extra args from JSX are ignored.
-  const handleKeyDown = (e) => handleGridKeyNav(e, { onAppendRow: appendRow });
-
-  const removeRow = (index) => {
-    if (items.length === 1) {
-      setItems([createEmptyRow()]);
-    } else {
-      setItems(items.filter((_, i) => i !== index));
-    }
-  };
-
-  const totals = items.reduce((acc, item) => {
-    acc.issued += Number(item.issued_qty) || 0;
-    acc.produced += Number(item.production_qty) || 0;
-    return acc;
-  }, { issued: 0, produced: 0 });
+  const totals = items.reduce(
+    (acc, r) => {
+      acc.issued += Number(r.issued_qty) || 0;
+      acc.produced += Number(r.production_qty) || 0;
+      return acc;
+    },
+    { issued: 0, produced: 0 }
+  );
 
   const handleSave = async () => {
     setError(null);
     try {
-      const validItems = items.filter(i => i.product_id && (Number(i.issued_qty) > 0 || Number(i.production_qty) > 0));
-      if (validItems.length === 0) throw new Error('Add at least one valid item with issued or production quantity.');
+      const validItems = items
+        .filter(
+          (r) =>
+            r.product_id &&
+            (Number(r.issued_qty) > 0 || Number(r.issued_pcs) > 0 || Number(r.production_qty) > 0 || Number(r.production_pcs) > 0)
+        )
+        .map((r) => ({
+          product_id: Number(r.product_id),
+          batch_no: r.batch_no,
+          issued_qty: Number(r.issued_qty) || 0,
+          issued_pcs: Number(r.issued_pcs) || 0,
+          production_qty: Number(r.production_qty) || 0,
+          production_pcs: Number(r.production_pcs) || 0
+        }));
+      if (validItems.length === 0) throw new Error('Add at least one item with an issued or produced quantity.');
 
-      const payload = {
+      await onSave({
         voucher_no: voucherNo,
-        warehouse_id: 1, // Default warehouse
+        warehouse_id: 1,
         production_date: productionDate,
         is_recurring: isRecurring,
         remarks,
-        items: validItems.map(i => ({
-          product_id: i.product_id,
-          batch_no: i.batch_no,
-          issued_qty: i.issued_qty,
-          issued_pcs: i.issued_pcs,
-          production_qty: i.production_qty,
-          production_pcs: i.production_pcs
-        }))
-      };
+        items: validItems
+      });
 
-      await onSave(payload);
-      
       setRemarks('');
       setIsRecurring(false);
-      setItems([createEmptyRow()]);
+      setFormulaId('');
+      setMultiplier('1');
+      setItems([emptyRow()]);
       const nextNo = await window.stockOps.getNextProductionVoucherNo();
       setVoucherNo(nextNo);
-
     } catch (err) {
       setError(err.message || 'Failed to save voucher');
     }
   };
 
-  const inputStyle = { width: '100%', border: '1px solid #d5cfc3', background: '#fff', color: '#4f6166' };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
-      {/* HEADER SECTION */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', height: '100%' }}>
+      {/* HEADER */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <h2>Issue To Production</h2>
-            <button type="button" className="secondary" onClick={() => setShowSettings(true)} style={{ padding: '4px 8px', fontSize: '0.9em' }}>
-              ⚙️ Settings
-            </button>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <h2>Production Voucher</h2>
           {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
         </div>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '16px', marginBottom: '8px' }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
           <label className="field">
             <span>Date</span>
-            <input type="text" placeholder="dd/mm/yyyy" value={productionDate} onChange={e => setProductionDate(e.target.value)} />
+            <input type="text" placeholder="dd/mm/yyyy" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} />
           </label>
           <label className="field">
             <span>Voucher No.</span>
             <input value={voucherNo} readOnly style={{ background: '#f2f0ea' }} />
           </label>
           <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', marginTop: '24px' }}>
-            <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} style={{ width: 'auto' }} />
+            <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} style={{ width: 'auto' }} />
             <span>Make it Recurring</span>
+          </label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+          <label className="field">
+            <span>Production Formula (fixed ratio)</span>
+            <select value={formulaId} onChange={(e) => applyFormula(e.target.value)}>
+              <option value="">— None (manual entry) —</option>
+              {formulas.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Batch (× multiplier)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={multiplier}
+              disabled={!formulaId}
+              onChange={(e) => onMultiplierChange(e.target.value)}
+              style={!formulaId ? { background: '#f2f0ea' } : undefined}
+            />
           </label>
         </div>
       </section>
 
-      {/* GRID SECTION */}
+      {/* SINGLE GRID: issued + produced per row */}
       <section className="panel" style={{ flex: 1, padding: '0', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ overflowY: 'auto', flex: 1 }}>
-          <table ref={gridRef} className="voucher-grid" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px 0' }}>
+          <button type="button" className="ghost-light-btn" onClick={appendRow} style={{ padding: '4px 10px' }}>
+            + Row
+          </button>
+        </div>
+        <div style={{ overflow: 'auto', flex: 1 }}>
+          <table ref={gridRef} className="voucher-grid" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#f8f8f6', zIndex: 1 }}>
               <tr>
-                <th style={{width: '40px'}}>#</th>
-                <th style={{width: '250px'}}>Stock Item</th>
-                {settings.showBatch && <th>Batch No.</th>}
-                <th>Issued Qty</th>
-                {settings.showPcs && <th>Issued PCS</th>}
-                <th>Prod. Qty</th>
-                {settings.showPcs && <th>Prod. PCS</th>}
-                <th style={{width: '40px'}}></th>
+                <th rowSpan={2} style={{ width: '30px' }}>#</th>
+                <th rowSpan={2}>Stock Item</th>
+                <th rowSpan={2} style={{ width: '110px' }}>Batch No.</th>
+                <th colSpan={2} style={{ ...issuedBorder, textAlign: 'center' }}>Issued (Raw Material)</th>
+                <th colSpan={2} style={{ ...producedBorder, textAlign: 'center' }}>Produced (Finished Goods)</th>
+                <th rowSpan={2} style={{ width: '28px' }} />
+              </tr>
+              <tr>
+                <th style={{ ...issuedBorder, width: '85px' }}>Qty</th>
+                <th style={{ width: '75px' }}>Pcs</th>
+                <th style={{ ...producedBorder, width: '85px' }}>Qty</th>
+                <th style={{ width: '75px' }}>Pcs</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((row, i) => {
-                let colIdx = 0;
-                return (
-                  <tr key={row.id}>
-                    <td style={{textAlign: 'center'}}>{i + 1}</td>
-                    <td>
-                      <select value={row.product_id} onChange={e => handleRowChange(i, 'product_id', e.target.value)} onKeyDown={e => handleKeyDown(e, i, colIdx++)} style={inputStyle}>
-                        <option value=""></option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
-                      </select>
-                    </td>
-                    {settings.showBatch && <td><input value={row.batch_no} onChange={e => handleRowChange(i, 'batch_no', e.target.value)} onKeyDown={e => handleKeyDown(e, i, colIdx++)} style={inputStyle} /></td>}
-                    <td><input type="text" inputMode="decimal" value={row.issued_qty} onChange={e => handleRowChange(i, 'issued_qty', e.target.value)} onKeyDown={e => handleKeyDown(e, i, colIdx++)} style={inputStyle} /></td>
-                    {settings.showPcs && <td><input type="text" inputMode="decimal" value={row.issued_pcs} onChange={e => handleRowChange(i, 'issued_pcs', e.target.value)} onKeyDown={e => handleKeyDown(e, i, colIdx++)} style={inputStyle} /></td>}
-                    <td><input type="text" inputMode="decimal" value={row.production_qty} onChange={e => handleRowChange(i, 'production_qty', e.target.value)} onKeyDown={e => handleKeyDown(e, i, colIdx++)} style={inputStyle} /></td>
-                    {settings.showPcs && <td><input type="text" inputMode="decimal" value={row.production_pcs} onChange={e => handleRowChange(i, 'production_pcs', e.target.value)} onKeyDown={e => handleKeyDown(e, i, colIdx++)} style={inputStyle} /></td>}
-                    <td style={{textAlign: 'center'}}><button type="button" onClick={() => removeRow(i)} tabIndex={-1} style={{padding: '2px 6px', background: 'transparent', color: 'red', border: 'none'}}>x</button></td>
-                  </tr>
-                );
-              })}
-              {/* TOTAL ROW */}
+              {items.map((row, i) => (
+                <tr key={row.id}>
+                  <td style={{ textAlign: 'center' }}>{i + 1}</td>
+                  <td>
+                    <select value={row.product_id} onChange={(e) => changeField(i, 'product_id', e.target.value)} onKeyDown={onGridKey} style={inputStyle}>
+                      <option value="" />
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.code} - {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input value={row.batch_no} onChange={(e) => changeField(i, 'batch_no', e.target.value)} onKeyDown={onGridKey} style={inputStyle} />
+                  </td>
+                  <td style={issuedBorder}>
+                    <input type="text" inputMode="decimal" value={row.issued_qty} onChange={(e) => changeField(i, 'issued_qty', e.target.value)} onKeyDown={onGridKey} style={inputStyle} />
+                  </td>
+                  <td>
+                    <input type="text" inputMode="decimal" value={row.issued_pcs} onChange={(e) => changeField(i, 'issued_pcs', e.target.value)} onKeyDown={onGridKey} style={inputStyle} />
+                  </td>
+                  <td style={producedBorder}>
+                    <input type="text" inputMode="decimal" value={row.production_qty} onChange={(e) => changeField(i, 'production_qty', e.target.value)} onKeyDown={onGridKey} style={inputStyle} />
+                  </td>
+                  <td>
+                    <input type="text" inputMode="decimal" value={row.production_pcs} onChange={(e) => changeField(i, 'production_pcs', e.target.value)} onKeyDown={onGridKey} style={inputStyle} />
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button type="button" onClick={() => removeRow(i)} tabIndex={-1} style={{ padding: '2px 6px', background: 'transparent', color: 'red', border: 'none' }}>
+                      x
+                    </button>
+                  </td>
+                </tr>
+              ))}
               <tr style={{ background: '#f8f8f6', fontWeight: 'bold' }}>
-                <td colSpan={settings.showBatch ? 3 : 2} style={{ textAlign: 'right', paddingRight: '16px' }}>Total:</td>
-                <td style={{ padding: '8px' }}>{totals.issued.toFixed(2)}</td>
-                {settings.showPcs && <td></td>}
-                <td style={{ padding: '8px' }}>{totals.produced.toFixed(2)}</td>
-                {settings.showPcs && <td></td>}
-                <td></td>
+                <td colSpan={3} style={{ textAlign: 'right', paddingRight: '10px' }}>Total Qty:</td>
+                <td style={issuedBorder}>{totals.issued.toFixed(2)}</td>
+                <td />
+                <td style={producedBorder}>{totals.produced.toFixed(2)}</td>
+                <td colSpan={2} />
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      {/* FOOTER SECTION */}
+      {/* FOOTER */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <label className="field">
-              <span>Remarks</span>
-              <textarea value={remarks} onChange={e => setRemarks(e.target.value)} rows={2} style={{ resize: 'vertical' }} />
-            </label>
-          </div>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end' }}>
-             <button type="button" onClick={handleSave} disabled={busy} style={{ minWidth: '120px' }}>
-              {busy ? 'Saving...' : 'Save (F2)'}
-            </button>
-          </div>
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-end' }}>
+          <label className="field" style={{ flex: 1 }}>
+            <span>Remarks</span>
+            <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} style={{ resize: 'vertical' }} />
+          </label>
+          <button type="button" onClick={handleSave} disabled={busy} style={{ minWidth: '140px' }}>
+            {busy ? 'Saving...' : 'Save Voucher'}
+          </button>
         </div>
       </section>
-
-      {/* SETTINGS MODAL */}
-      {showSettings && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="panel" style={{ width: '400px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3>Production Settings</h3>
-            
-            <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-              <input type="checkbox" checked={settings.showBatch} onChange={e => setSettings(s => ({ ...s, showBatch: e.target.checked }))} />
-              <span>Show Batch No. Column</span>
-            </label>
-            <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-              <input type="checkbox" checked={settings.showPcs} onChange={e => setSettings(s => ({ ...s, showPcs: e.target.checked }))} />
-              <span>Show PCS Columns</span>
-            </label>
-
-            <label className="field">
-              <span>Default Issued Qty</span>
-              <input type="text" inputMode="decimal" value={settings.defaultIssuedQty} onChange={e => setSettings(s => ({ ...s, defaultIssuedQty: e.target.value }))} />
-            </label>
-
-            <label className="field">
-              <span>Default Production Qty</span>
-              <input type="text" inputMode="decimal" value={settings.defaultProductionQty} onChange={e => setSettings(s => ({ ...s, defaultProductionQty: e.target.value }))} />
-            </label>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-              <button type="button" className="secondary" onClick={() => setShowSettings(false)}>Cancel</button>
-              <button type="button" onClick={handleSaveSettings}>Save Settings</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

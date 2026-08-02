@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { AuthService } from '../services/authService.js';
 import { categoryService, hsnService, partyService, productService, unitService, warehouseService } from '../services/lookupServices.js';
+import { productionFormulaService } from '../services/productionFormulaService.js';
 import { InventoryService } from '../services/inventoryService.js';
 import { ReportService } from '../reports/reportService.js';
 import { BackupService } from '../backup/backupService.js';
@@ -21,7 +22,8 @@ const servicesByEntity = {
   hsn: hsnService,
   party: partyService,
   warehouse: warehouseService,
-  product: productService
+  product: productService,
+  formula: productionFormulaService
 };
 
 export function registerIpcHandlers() {

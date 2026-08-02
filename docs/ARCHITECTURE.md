@@ -15,9 +15,10 @@ documents the database in detail.
 
 - **Masters** (reference data you set up once): Stock Items (products), Parties
   (customers/suppliers/brokers), Groups (categories), Units of Measure (UOM),
-  HSN codes, Warehouse.
+  HSN codes, Production Formulas (recipes), Warehouse.
 - **Vouchers** (day‑to‑day transactions): Purchase, Sale, Sale Return,
-  Purchase Return, Production (issue/produce).
+  Purchase Return, and Production (a single manufacturing voucher that records both the
+  raw materials issued and the finished goods produced).
 - **Reports & views**: Dashboard, Daily Stock Summary, Item Stock Ledger.
 - Every voucher ultimately writes **stock movements** into one ledger table, and the
   current stock of any item is simply the **sum** of those movements.
@@ -196,14 +197,16 @@ sequenceDiagram
 
 - `main.jsx` mounts `App.jsx`. `App.jsx` reads/writes the **zustand** store
   (`stores/sessionStore.js`): `user`, `products`, `parties`, `categories`, `units`,
-  `dashboard`, `vouchers`, `activeView`, `busy`, `error`.
+  `formulas`, `dashboard`, `vouchers`, `activeView`, `busy`, `error`.
 - On login, `App.jsx` calls `refreshMasters()` and `refreshDashboard()` which pull data
   through `window.stockOps`. HSN (~21k rows) is **not** preloaded — it is searched on
   demand.
 - `AppShell.jsx` renders the **collapsible sidebar** (navigation from
   `config/navigation.js`) and the active panel.
 - Panels: `StockMasterPanel`, `PartyMasterPanel`, `CodesUnitsPanel` (HSN + UOM),
-  the five voucher panels, `DashboardView`, `DailyStockSummaryPanel`, `ItemLedgerPanel`.
+  `ProductionFormulaPanel` (recipe master), the voucher panels
+  (Purchase, Sale, Sale Return, Purchase Return, **Production**),
+  `DashboardView`, `DailyStockSummaryPanel`, `ItemLedgerPanel`.
 - Reusable UI/logic utils:
   - `utils/formKeyNav.js` — Enter/arrow navigation across ordinary form fields
     (geometric: Enter/→ move right & wrap to next row; dropdowns open on landing).
@@ -289,7 +292,34 @@ Each voucher type follows the same shape:
 | Production        | `production`        | `production_items`      | `production_out` (**−**) and/or `production_in` (**+**) |
 
 All line movements from one voucher share the same `transaction_no` (= the voucher no)
-and are additionally linked by `source_type` + `source_id`.
+and are additionally linked by `source_type` + `source_id`. (`transaction_no` is **not**
+unique — a voucher legitimately produces several stock lines.)
+
+### Production voucher & formulas
+
+Production (manufacturing) is a **single voucher** that captures what was consumed and
+what was made together — there is no separate "Issue to Production". Each grid row is one
+stock item with two sides:
+
+```
+# | Stock Item | Batch No. | Issued (Raw Material): Qty | Pcs | Produced (Finished Goods): Qty | Pcs
+```
+
+- The **Issued** side posts `production_out` (−) and the **Produced** side posts
+  `production_in` (+). One row can drive either or both. Stock moves by the item's basis
+  (quantity if given, else pcs).
+
+A **Production Formula** (`ProductionFormula` master) is a saved recipe with a fixed
+ratio: a list of issued items and produced items with base quantities. On the voucher you
+pick a formula and scale it two ways (both supported):
+
+- a **Batch (× multiplier)** — every line = base × N; or
+- **live rescale** — editing any one Qty rescales all lines to keep the ratio (and the
+  multiplier updates to the derived factor).
+
+The formula's ratio is based on **Quantity**; Pcs scales by the same factor. Formulas are
+managed in the **Production Formulas** master screen; they only pre-fill a voucher and are
+never posted themselves.
 
 ---
 
@@ -323,6 +353,7 @@ Current migrations:
 | 1 | `..._init`                                   | Creates all tables + indexes. |
 | 2 | `..._stock_party_purchase_revamp`            | Adds HSN master, extends Product, drops `Party.type`, adds `purchase_items.product_name`. |
 | 3 | `..._stocktxn_no_not_unique`                 | Drops the UNIQUE index on `stock_transactions.transaction_no` (so a voucher can write several line movements under one number). |
+| 4 | `..._production_formulas`                     | Adds the `production_formulas` table (recipe master with a JSON lines column). |
 
 ### 8.3 Seeding (`db/seed.js`)
 
@@ -406,11 +437,18 @@ erDiagram
     string code UK
     string description
   }
+  PRODUCTION_FORMULA {
+    int id PK
+    string name
+    string code UK
+    string lines_json "[{product_id, kind, quantity, pcs}]"
+  }
 ```
 
-> `HSN` is a standalone master used to populate the searchable HSN picker;
-> `products.hsn` stores the chosen code as a denormalized string (so an item keeps its
-> HSN even if the master entry changes).
+> `HSN` and `PRODUCTION_FORMULA` are standalone masters (no foreign keys). `products.hsn`
+> stores the chosen HSN code as a denormalized string; a formula stores its lines as JSON
+> (each line references a `product_id`), so both keep working independently of the
+> products they mention.
 
 ### 8.5 Tables
 
@@ -435,6 +473,9 @@ erDiagram
   `name`, `code` (unique), `hsn`, `size`, `length`, `unit_basis` (`pcs|quantity`),
   `gst_rate`, `sale_rate`, `purchase_rate`, `size_diff`, `batch_no`, `description`,
   `opening_stock_date`, `isi_mark`, `is_active`, `min_stock`.
+- `production_formulas` — recipe master (name, unique code, `lines_json`). Each JSON line
+  is `{ product_id, kind: 'issue'|'produce', quantity, pcs }`. Managed via the generic
+  MASTER_* channels (entity `formula`), with a service that (de)serializes the lines.
 
 **Voucher headers + lines** (one header → many item rows)
 
@@ -442,7 +483,8 @@ erDiagram
 - `sales` / `sale_items`
 - `sale_returns` / `sale_return_items`
 - `purchase_returns` / `purchase_return_items`
-- `production` / `production_items` (issued vs produced qty/pcs)
+- `production` / `production_items` — one row per item holding both issued
+  (`issued_qty`/`issued_pcs`) and produced (`production_qty`/`production_pcs`) amounts.
 
 Header rows carry party, warehouse, dates, voucher/invoice numbers, and rolled‑up
 `taxable_value` / `gst_amount` / `total_amount`. Line rows carry per‑item pcs, quantity,
