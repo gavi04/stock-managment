@@ -34,5 +34,6 @@ export const IPC_CHANNELS = {
   VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: 'stockops:voucher-purchase-return-get-next-no',
   VOUCHER_LIST_RECENT: 'stockops:voucher-list-recent',
   VOUCHER_GET_DETAIL: 'stockops:voucher-get-detail',
-  IMPORT_EXCEL: 'stockops:import-excel'
+  IMPORT_EXCEL: 'stockops:import-excel',
+  UPDATE_CHECK: 'stockops:update-check'
 };

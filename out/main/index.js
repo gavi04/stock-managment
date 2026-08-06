@@ -32,6 +32,7 @@ const crypto = require("node:crypto");
 const bcrypt = require("bcryptjs");
 const zod = require("zod");
 const ExcelJS = require("exceljs");
+const electronUpdater = require("electron-updater");
 const sync = require("csv-stringify/sync");
 const PDFDocument = require("pdfkit");
 function _interopNamespaceDefault(e) {
@@ -1009,7 +1010,8 @@ const IPC_CHANNELS = {
   VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no",
   VOUCHER_LIST_RECENT: "stockops:voucher-list-recent",
   VOUCHER_GET_DETAIL: "stockops:voucher-get-detail",
-  IMPORT_EXCEL: "stockops:import-excel"
+  IMPORT_EXCEL: "stockops:import-excel",
+  UPDATE_CHECK: "stockops:update-check"
 };
 class AppError extends Error {
   constructor(message, code = "APP_ERROR", status = 400, details = null) {
@@ -1958,6 +1960,94 @@ class ImportService {
     return created.id;
   }
 }
+const { autoUpdater } = electronUpdater;
+let manualCheck = false;
+let initialised = false;
+function activeWindow() {
+  return electron.BrowserWindow.getFocusedWindow() ?? electron.BrowserWindow.getAllWindows()[0] ?? null;
+}
+function initAutoUpdater() {
+  if (initialised) return;
+  initialised = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = logger;
+  autoUpdater.on("update-available", async (info) => {
+    const { response } = await electron.dialog.showMessageBox(activeWindow(), {
+      type: "info",
+      title: "Update available",
+      message: `A new version of StockOps (${info.version}) is available.`,
+      detail: "Would you like to download it now? Your data will not be affected.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    manualCheck = false;
+    if (response === 0) {
+      autoUpdater.downloadUpdate().catch((err) => reportError(err));
+    }
+  });
+  autoUpdater.on("update-not-available", () => {
+    if (manualCheck) {
+      electron.dialog.showMessageBox(activeWindow(), {
+        type: "info",
+        title: "No updates",
+        message: `StockOps ${electron.app.getVersion()} is the latest version.`,
+        buttons: ["OK"],
+        noLink: true
+      });
+    }
+    manualCheck = false;
+  });
+  autoUpdater.on("update-downloaded", async (info) => {
+    const { response } = await electron.dialog.showMessageBox(activeWindow(), {
+      type: "info",
+      title: "Update ready",
+      message: `Version ${info.version} has been downloaded.`,
+      detail: "Restart StockOps now to install it? You can also keep working and it will install next time you close the app.",
+      buttons: ["Restart now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    if (response === 0) {
+      setImmediate(() => autoUpdater.quitAndInstall());
+    }
+  });
+  autoUpdater.on("error", (err) => reportError(err));
+}
+function reportError(err) {
+  logger.error("auto-update error", { message: err?.message });
+  if (manualCheck) {
+    electron.dialog.showMessageBox(activeWindow(), {
+      type: "error",
+      title: "Update check failed",
+      message: "Could not check for updates.",
+      detail: err?.message || String(err),
+      buttons: ["OK"],
+      noLink: true
+    });
+  }
+  manualCheck = false;
+}
+function checkForUpdates({ manual = false } = {}) {
+  if (!electron.app.isPackaged) {
+    if (manual) {
+      electron.dialog.showMessageBox(activeWindow(), {
+        type: "info",
+        title: "Updates",
+        message: "Update checks only run in the installed app, not in development.",
+        buttons: ["OK"],
+        noLink: true
+      });
+    }
+    return;
+  }
+  initAutoUpdater();
+  manualCheck = manual;
+  autoUpdater.checkForUpdates().catch((err) => reportError(err));
+}
 function deserialize(row) {
   if (!row) return row;
   let lines = [];
@@ -2612,7 +2702,11 @@ const servicesByEntity = {
   formula: productionFormulaService
 };
 function registerIpcHandlers() {
-  electron.ipcMain.handle(IPC_CHANNELS.APP_INFO, () => ({ name: "StockOps", version: "1.0.0" }));
+  electron.ipcMain.handle(IPC_CHANNELS.APP_INFO, () => ({ name: "StockOps", version: electron.app.getVersion() }));
+  electron.ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, () => {
+    checkForUpdates({ manual: true });
+    return { started: true };
+  });
   electron.ipcMain.handle(IPC_CHANNELS.AUTH_BOOTSTRAP_STATUS, async () => ({ needsBootstrap: await authService.needsBootstrap() }));
   electron.ipcMain.handle(IPC_CHANNELS.AUTH_LOGIN, async (_event, payload) => authService.login(payload));
   electron.ipcMain.handle(IPC_CHANNELS.AUTH_CREATE_USER, async (_event, payload) => authService.createUser(payload));
@@ -2721,6 +2815,7 @@ electron.app.whenReady().then(async () => {
   await initializeDatabase();
   registerIpcHandlers();
   createMainWindow();
+  setTimeout(() => checkForUpdates(), 4e3);
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();

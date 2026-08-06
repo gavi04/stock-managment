@@ -425,6 +425,37 @@ button:disabled {
   min-width: 0;
 }
 
+.app-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.app-version-row .nav-label {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.update-check-btn {
+  background: transparent;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.update-check-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--gold-strong);
+}
+
+.erp-layout.collapsed .app-version-row {
+  display: none;
+}
+
 .user-avatar {
   flex: 0 0 auto;
   width: 34px;

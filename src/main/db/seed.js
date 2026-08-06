@@ -42,6 +42,7 @@ export async function seedDatabase(prisma) {
       backupIntervalHours: 24
     }
   });
+  
 
   // Groups are modelled as categories.
   const GROUPS = [

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { initializeDatabase, closeDatabase } from './db/database.js';
 import { ensureDirectory, logger } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/handlers.js';
+import { checkForUpdates } from './updater.js';
 
 const isDev = !app.isPackaged;
 
@@ -52,6 +53,10 @@ app.whenReady().then(async () => {
   await initializeDatabase();
   registerIpcHandlers();
   createMainWindow();
+
+  // Silently check GitHub for a newer release on launch; only prompts if one
+  // exists (no-op in dev / unpackaged). Small delay so the window settles first.
+  setTimeout(() => checkForUpdates(), 4000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

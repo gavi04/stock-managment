@@ -12,6 +12,7 @@
     "preview": "electron-vite preview",
     "dist": "electron-vite build && electron-builder --win",
     "dist:dir": "electron-vite build && electron-builder --win --dir",
+    "release": "electron-vite build && electron-builder --win --publish always",
     "postinstall": "electron-builder install-app-deps",
     "test": "vitest run"
   },
@@ -23,6 +24,7 @@
     "better-sqlite3": "^12.6.0",
     "csv-stringify": "^6.6.0",
     "electron-store": "^10.0.0",
+    "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
     "pdfkit": "^0.17.1",
     "react": "^18.3.1",
@@ -52,6 +54,14 @@
       "out/**",
       "prisma/migrations/**",
       "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "gavi04",
+        "repo": "stock-managment",
+        "releaseType": "release"
+      }
     ],
     "mac": {
       "category": "public.app-category.business"

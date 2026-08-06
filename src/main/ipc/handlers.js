@@ -1,7 +1,8 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { AuthService } from '../services/authService.js';
 import { ImportService } from '../services/importService.js';
+import { checkForUpdates } from '../updater.js';
 import { categoryService, hsnService, partyService, productService, unitService, warehouseService } from '../services/lookupServices.js';
 import { productionFormulaService } from '../services/productionFormulaService.js';
 import { InventoryService } from '../services/inventoryService.js';
@@ -29,7 +30,11 @@ const servicesByEntity = {
 };
 
 export function registerIpcHandlers() {
-  ipcMain.handle(IPC_CHANNELS.APP_INFO, () => ({ name: 'StockOps', version: '1.0.0' }));
+  ipcMain.handle(IPC_CHANNELS.APP_INFO, () => ({ name: 'StockOps', version: app.getVersion() }));
+  ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, () => {
+    checkForUpdates({ manual: true });
+    return { started: true };
+  });
   ipcMain.handle(IPC_CHANNELS.AUTH_BOOTSTRAP_STATUS, async () => ({ needsBootstrap: await authService.needsBootstrap() }));
 
   ipcMain.handle(IPC_CHANNELS.AUTH_LOGIN, async (_event, payload) => authService.login(payload));

@@ -12934,6 +12934,10 @@ function NavIcon({ name }) {
 }
 const STORAGE_KEY = "stockops.sidebarCollapsed";
 function AppShell({ navigation, activeKey, onNavigate, headerTitle, children, onLogout, user }) {
+  const [version, setVersion] = reactExports.useState("");
+  reactExports.useEffect(() => {
+    window.stockOps?.getAppInfo?.().then((info) => setVersion(info?.version || "")).catch(() => void 0);
+  }, []);
   const [collapsed, setCollapsed] = reactExports.useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === "1";
@@ -12993,6 +12997,19 @@ function AppShell({ navigation, activeKey, onNavigate, headerTitle, children, on
         /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", className: "ghost-btn", onClick: onLogout, title: "Logout", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "nav-label", children: "Logout" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "app-version-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "nav-label", children: version ? `v${version}` : "" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: "update-check-btn",
+              onClick: () => window.stockOps?.checkForUpdates?.(),
+              title: "Check for updates",
+              children: "Check for updates"
+            }
+          )
         ] })
       ] })
     ] }),

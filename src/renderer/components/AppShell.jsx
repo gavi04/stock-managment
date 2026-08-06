@@ -27,6 +27,12 @@ function NavIcon({ name }) {
 const STORAGE_KEY = 'stockops.sidebarCollapsed';
 
 export function AppShell({ navigation, activeKey, onNavigate, headerTitle, children, onLogout, user }) {
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    window.stockOps?.getAppInfo?.().then((info) => setVersion(info?.version || '')).catch(() => undefined);
+  }, []);
+
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === '1';
@@ -103,6 +109,17 @@ export function AppShell({ navigation, activeKey, onNavigate, headerTitle, child
             </svg>
             <span className="nav-label">Logout</span>
           </button>
+          <div className="app-version-row">
+            <span className="nav-label">{version ? `v${version}` : ''}</span>
+            <button
+              type="button"
+              className="update-check-btn"
+              onClick={() => window.stockOps?.checkForUpdates?.()}
+              title="Check for updates"
+            >
+              Check for updates
+            </button>
+          </div>
         </div>
       </aside>
 

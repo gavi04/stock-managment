@@ -36,7 +36,8 @@ const IPC_CHANNELS = {
   VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no",
   VOUCHER_LIST_RECENT: "stockops:voucher-list-recent",
   VOUCHER_GET_DETAIL: "stockops:voucher-get-detail",
-  IMPORT_EXCEL: "stockops:import-excel"
+  IMPORT_EXCEL: "stockops:import-excel",
+  UPDATE_CHECK: "stockops:update-check"
 };
 const api = {
   getAppInfo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.APP_INFO),
@@ -74,6 +75,7 @@ const api = {
   getNextPartyCode: () => electron.ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE),
   listVouchers: (type, limit = 20) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_LIST_RECENT, { type, limit }),
   getVoucher: (type, id) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_GET_DETAIL, { type, id }),
-  importExcel: () => electron.ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL)
+  importExcel: () => electron.ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL),
+  checkForUpdates: () => electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK)
 };
 electron.contextBridge.exposeInMainWorld("stockOps", api);

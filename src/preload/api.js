@@ -37,7 +37,8 @@ const api = {
   getNextPartyCode: () => ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE),
   listVouchers: (type, limit = 20) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_LIST_RECENT, { type, limit }),
   getVoucher: (type, id) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_GET_DETAIL, { type, id }),
-  importExcel: () => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL)
+  importExcel: () => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL),
+  checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK)
 };
 
 contextBridge.exposeInMainWorld('stockOps', api);
