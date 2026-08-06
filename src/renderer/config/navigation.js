@@ -9,7 +9,8 @@ export const NAVIGATION = [
       { key: 'stock-master', label: 'Stock Master' },
       { key: 'party-master', label: 'Party Master' },
       { key: 'codes-units', label: 'Codes & Units' },
-      { key: 'production-formula', label: 'Production Formulas' }
+      { key: 'production-formula', label: 'Production Formulas' },
+      { key: 'data-import', label: 'Import from Excel' }
     ]
   },
   {
@@ -45,6 +46,7 @@ export const VIEW_LABELS = {
   'party-master': 'Party Master',
   'codes-units': 'Codes & Units',
   'production-formula': 'Production Formulas',
+  'data-import': 'Import from Excel',
   'purchase-entry': 'Purchase Entry',
   'sale-return-entry': 'Sale Return Entry',
   'production-entry': 'Production',

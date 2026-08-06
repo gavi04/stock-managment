@@ -5,6 +5,7 @@ const IPC_CHANNELS = {
   AUTH_BOOTSTRAP_STATUS: "stockops:auth-bootstrap-status",
   AUTH_LOGIN: "stockops:auth-login",
   AUTH_CREATE_USER: "stockops:auth-create-user",
+  AUTH_RESET_PASSWORD: "stockops:auth-reset-password",
   MASTER_LIST: "stockops:master-list",
   MASTER_GET: "stockops:master-get",
   MASTER_CREATE: "stockops:master-create",
@@ -32,13 +33,17 @@ const IPC_CHANNELS = {
   VOUCHER_SALE_SAVE: "stockops:voucher-sale-save",
   VOUCHER_SALE_GET_NEXT_NO: "stockops:voucher-sale-get-next-no",
   VOUCHER_PURCHASE_RETURN_SAVE: "stockops:voucher-purchase-return-save",
-  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no"
+  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no",
+  VOUCHER_LIST_RECENT: "stockops:voucher-list-recent",
+  VOUCHER_GET_DETAIL: "stockops:voucher-get-detail",
+  IMPORT_EXCEL: "stockops:import-excel"
 };
 const api = {
   getAppInfo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.APP_INFO),
   getBootstrapStatus: () => electron.ipcRenderer.invoke(IPC_CHANNELS.AUTH_BOOTSTRAP_STATUS),
   login: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOGIN, payload),
   createUser: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.AUTH_CREATE_USER, payload),
+  resetPassword: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.AUTH_RESET_PASSWORD, payload),
   listMaster: (entity, filters) => electron.ipcRenderer.invoke(IPC_CHANNELS.MASTER_LIST, { entity, filters }),
   getMaster: (entity, id) => electron.ipcRenderer.invoke(IPC_CHANNELS.MASTER_GET, { entity, id }),
   createMaster: (entity, payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.MASTER_CREATE, { entity, payload }),
@@ -66,6 +71,9 @@ const api = {
   getNextSaleVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_GET_NEXT_NO),
   savePurchaseReturnVoucher: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_SAVE, payload),
   getNextPurchaseReturnVoucherNo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO),
-  getNextPartyCode: () => electron.ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE)
+  getNextPartyCode: () => electron.ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE),
+  listVouchers: (type, limit = 20) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_LIST_RECENT, { type, limit }),
+  getVoucher: (type, id) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_GET_DETAIL, { type, id }),
+  importExcel: () => electron.ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL)
 };
 electron.contextBridge.exposeInMainWorld("stockOps", api);

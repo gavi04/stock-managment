@@ -7,12 +7,21 @@
 //   Up / Down     -> field directly above / below.
 //   Dropdowns     -> when navigation lands on a <select>, its list opens so you
 //                    can browse with up/down; Enter picks and moves on.
+//   Buttons       -> Save / Submit / Cancel buttons are part of the tab order,
+//                    so navigating past the last field lands on them (press
+//                    Enter or Space to activate). Buttons that opt out with
+//                    tabIndex={-1} (e.g. per-row delete) are skipped.
 //
 // Left/Right on a text input only jump cells when the caret is at the field
 // edge, so they keep moving the cursor while you're editing.
+//
+// At a section's first/last field, Enter/Left/Right hand off to focusAdjacent so
+// focus crosses into the neighbouring section (header <-> grid <-> footer).
+
+import { focusAdjacent } from './focusScope.js';
 
 const FOCUSABLE =
-  'input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])';
+  'input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])';
 
 function visibleFocusables(container) {
   return [...container.querySelectorAll(FOCUSABLE)].filter(
@@ -96,16 +105,18 @@ function geoNav(el, container, dir) {
 }
 
 // First field of the next row (below) / last field of the previous row (above).
+// A "different row" is one that does NOT vertically overlap el. We compare edges
+// (top/bottom) rather than centres so a taller same-row cell — e.g. the Item Code
+// field that carries a hint line under it — doesn't make its shorter neighbour
+// look like it's on the row below.
 function rowEdge(el, container, below) {
   const r0 = el.getBoundingClientRect();
-  const cy = r0.top + r0.height / 2;
   let best = null;
   let bestRect = null;
   for (const it of visibleFocusables(container)) {
     if (it === el) continue;
     const r = it.getBoundingClientRect();
-    const iy = r.top + r.height / 2;
-    if (below ? iy <= cy + 2 : iy >= cy - 2) continue;
+    if (below ? r.top < r0.bottom - 2 : r.bottom > r0.top + 2) continue;
     if (!best) {
       best = it;
       bestRect = r;
@@ -124,12 +135,22 @@ function rowEdge(el, container, below) {
   return best;
 }
 
+// Fallback: the neighbour in document order. Geometry can miss the Save/Submit
+// button when it sits in its own actions row below the grid; DOM order always
+// finds it (it's the next focusable after the last field).
+function domSibling(el, container, step) {
+  const list = visibleFocusables(container);
+  const idx = list.indexOf(el);
+  if (idx === -1) return null;
+  return list[idx + step] || null;
+}
+
 function nextField(el, container) {
-  return geoNav(el, container, 'right') || rowEdge(el, container, true);
+  return geoNav(el, container, 'right') || rowEdge(el, container, true) || domSibling(el, container, 1);
 }
 
 function prevField(el, container) {
-  return geoNav(el, container, 'left') || rowEdge(el, container, false);
+  return geoNav(el, container, 'left') || rowEdge(el, container, false) || domSibling(el, container, -1);
 }
 
 function atStart(el) {
@@ -153,7 +174,36 @@ export function handleFormKeyNav(e) {
   if (!el || !['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return;
   const container = e.currentTarget;
 
-  if (el.tagName === 'TEXTAREA') return; // newlines + native caret
+  if (el.tagName === 'TEXTAREA') {
+    // Enter moves on like every other field so the flow reaches the Save button;
+    // Shift+Enter still inserts a real newline. Left/Right leave at the caret edge.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const n = nextField(el, container);
+      if (n) {
+        e.preventDefault();
+        place(n, 'select');
+      } else if (focusAdjacent(el, 1, 'select')) {
+        e.preventDefault();
+      }
+    } else if (e.key === 'ArrowRight' && atEnd(el)) {
+      const n = nextField(el, container);
+      if (n) {
+        e.preventDefault();
+        place(n, 'start');
+      } else if (focusAdjacent(el, 1, 'start')) {
+        e.preventDefault();
+      }
+    } else if (e.key === 'ArrowLeft' && atStart(el)) {
+      const n = prevField(el, container);
+      if (n) {
+        e.preventDefault();
+        place(n, 'end');
+      } else if (focusAdjacent(el, -1, 'end')) {
+        e.preventDefault();
+      }
+    }
+    return;
+  }
 
   if (el.tagName === 'SELECT') {
     if (e.key === 'Enter' || e.key === 'ArrowRight') {
@@ -161,12 +211,16 @@ export function handleFormKeyNav(e) {
       if (n) {
         e.preventDefault();
         place(n, 'start');
+      } else if (focusAdjacent(el, 1, 'start')) {
+        e.preventDefault();
       }
     } else if (e.key === 'ArrowLeft') {
       const n = prevField(el, container);
       if (n) {
         e.preventDefault();
         place(n, 'end');
+      } else if (focusAdjacent(el, -1, 'end')) {
+        e.preventDefault();
       }
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       // Open the list so the options are visible; native handles traversal.
@@ -184,6 +238,8 @@ export function handleFormKeyNav(e) {
     if (n) {
       e.preventDefault();
       place(n, 'select');
+    } else if (focusAdjacent(el, 1, 'select')) {
+      e.preventDefault();
     }
     return;
   }
@@ -207,12 +263,16 @@ export function handleFormKeyNav(e) {
     if (t) {
       e.preventDefault();
       place(t, 'start');
+    } else if (focusAdjacent(el, 1, 'start')) {
+      e.preventDefault();
     }
   } else if (e.key === 'ArrowLeft' && atStart(el)) {
     const t = prevField(el, container);
     if (t) {
       e.preventDefault();
       place(t, 'end');
+    } else if (focusAdjacent(el, -1, 'end')) {
+      e.preventDefault();
     }
   }
 }

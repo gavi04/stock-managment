@@ -6,6 +6,7 @@ const api = {
   getBootstrapStatus: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_BOOTSTRAP_STATUS),
   login: (payload) => ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOGIN, payload),
   createUser: (payload) => ipcRenderer.invoke(IPC_CHANNELS.AUTH_CREATE_USER, payload),
+  resetPassword: (payload) => ipcRenderer.invoke(IPC_CHANNELS.AUTH_RESET_PASSWORD, payload),
   listMaster: (entity, filters) => ipcRenderer.invoke(IPC_CHANNELS.MASTER_LIST, { entity, filters }),
   getMaster: (entity, id) => ipcRenderer.invoke(IPC_CHANNELS.MASTER_GET, { entity, id }),
   createMaster: (entity, payload) => ipcRenderer.invoke(IPC_CHANNELS.MASTER_CREATE, { entity, payload }),
@@ -33,7 +34,10 @@ const api = {
   getNextSaleVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_SALE_GET_NEXT_NO),
   savePurchaseReturnVoucher: (payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_SAVE, payload),
   getNextPurchaseReturnVoucherNo: () => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO),
-  getNextPartyCode: () => ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE)
+  getNextPartyCode: () => ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE),
+  listVouchers: (type, limit = 20) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_LIST_RECENT, { type, limit }),
+  getVoucher: (type, id) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_GET_DETAIL, { type, id }),
+  importExcel: () => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL)
 };
 
 contextBridge.exposeInMainWorld('stockOps', api);

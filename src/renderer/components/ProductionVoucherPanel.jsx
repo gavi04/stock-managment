@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { handleGridKeyNav } from '../utils/gridKeyNav.js';
 import { handleFormKeyNav } from '../utils/formKeyNav.js';
 import { todayDdmmyyyy } from '../utils/dateFormat.js';
+import { VoucherHistory } from './VoucherHistory.jsx';
+import { useFocusFirstField } from '../utils/useFocusFirstField.js';
 
 // A single row holds both the issued (raw material) and produced (finished goods)
 // amounts for a stock item. `base` is set only when the row came from a formula,
@@ -38,6 +40,8 @@ export function ProductionVoucherPanel({ products, formulas = [], busy, onSave }
 
   const [items, setItems] = useState([emptyRow()]);
   const [error, setError] = useState(null);
+  const [historyKey, setHistoryKey] = useState(0);
+  const rootRef = useFocusFirstField();
   const gridRef = useRef(null);
 
   useEffect(() => {
@@ -145,13 +149,14 @@ export function ProductionVoucherPanel({ products, formulas = [], busy, onSave }
       setItems([emptyRow()]);
       const nextNo = await window.stockOps.getNextProductionVoucherNo();
       setVoucherNo(nextNo);
+      setHistoryKey((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to save voucher');
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', height: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: '14px', height: '100%' }}>
       {/* HEADER */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -285,6 +290,14 @@ export function ProductionVoucherPanel({ products, formulas = [], busy, onSave }
           </button>
         </div>
       </section>
+
+      <VoucherHistory
+        type="production"
+        refreshToken={historyKey}
+        title="Recent Production Vouchers"
+        showParty={false}
+        showAmount={false}
+      />
     </div>
   );
 }

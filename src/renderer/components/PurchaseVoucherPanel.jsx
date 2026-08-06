@@ -3,6 +3,8 @@ import { SearchableSelect } from './SearchableSelect.jsx';
 import { handleGridKeyNav } from '../utils/gridKeyNav.js';
 import { todayDdmmyyyy } from '../utils/dateFormat.js';
 import { handleFormKeyNav } from '../utils/formKeyNav.js';
+import { VoucherHistory } from './VoucherHistory.jsx';
+import { useFocusFirstField } from '../utils/useFocusFirstField.js';
 
 function createEmptyRow() {
   return {
@@ -62,8 +64,10 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
 
   const [items, setItems] = useState([createEmptyRow()]);
   const [error, setError] = useState(null);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const gridRef = useRef(null);
+  const rootRef = useFocusFirstField();
 
   useEffect(() => {
     window.stockOps.getNextPurchaseVoucherNo().then(setVoucherNo).catch(console.error);
@@ -189,6 +193,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
 
       await onSave(payload);
       await resetForm();
+      setHistoryKey((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to save voucher');
     }
@@ -198,7 +203,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   const readonlyStyle = { ...inputStyle, background: '#f2f0ea', color: '#5d6a6e' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* HEADER SECTION */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -297,12 +302,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
                       </select>
                     </td>
                     <td>
-                      <input
-                        value={row.product_name}
-                        onChange={(e) => handleRowChange(i, 'product_name', e.target.value)}
-                        onKeyDown={onGridKey}
-                        style={inputStyle}
-                      />
+                      <input value={row.product_name} readOnly tabIndex={-1} style={readonlyStyle} />
                     </td>
                     <td>
                       <input value={row.hsn} readOnly tabIndex={-1} style={readonlyStyle} />
@@ -441,6 +441,8 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
           </button>
         </div>
       </section>
+
+      <VoucherHistory type="purchase" refreshToken={historyKey} title="Recent Purchase Vouchers" partyLabel="Supplier" />
     </div>
   );
 }

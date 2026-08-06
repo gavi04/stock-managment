@@ -3,6 +3,7 @@ export const IPC_CHANNELS = {
   AUTH_BOOTSTRAP_STATUS: 'stockops:auth-bootstrap-status',
   AUTH_LOGIN: 'stockops:auth-login',
   AUTH_CREATE_USER: 'stockops:auth-create-user',
+  AUTH_RESET_PASSWORD: 'stockops:auth-reset-password',
   MASTER_LIST: 'stockops:master-list',
   MASTER_GET: 'stockops:master-get',
   MASTER_CREATE: 'stockops:master-create',
@@ -30,5 +31,8 @@ export const IPC_CHANNELS = {
   VOUCHER_SALE_SAVE: 'stockops:voucher-sale-save',
   VOUCHER_SALE_GET_NEXT_NO: 'stockops:voucher-sale-get-next-no',
   VOUCHER_PURCHASE_RETURN_SAVE: 'stockops:voucher-purchase-return-save',
-  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: 'stockops:voucher-purchase-return-get-next-no'
+  VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: 'stockops:voucher-purchase-return-get-next-no',
+  VOUCHER_LIST_RECENT: 'stockops:voucher-list-recent',
+  VOUCHER_GET_DETAIL: 'stockops:voucher-get-detail',
+  IMPORT_EXCEL: 'stockops:import-excel'
 };

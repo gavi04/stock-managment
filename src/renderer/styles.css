@@ -155,6 +155,49 @@ body {
   color: #e39b96;
 }
 
+/* Link-style button for "Forgot password?" / "Back to sign in". */
+.link-button {
+  margin-top: 14px;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.link-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--gold-strong);
+}
+
+/* One-time recovery code display. */
+.recovery-code-box {
+  margin: 22px 0 12px;
+  padding: 18px;
+  border: 1px dashed rgba(200, 178, 122, 0.6);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--paper);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  user-select: all;
+  word-break: break-all;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.auth-actions button {
+  flex: 1;
+}
+
 button {
   border: 0;
   border-radius: 10px;
@@ -566,6 +609,350 @@ th {
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+
+/* ---- Daily Stock Summary ---- */
+.summary-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.summary-quick-row button {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.summary-quick-active {
+  background: var(--gold);
+  color: #2f3a3d;
+}
+
+/* Auto width + wrapping headers so the 12 columns stay fully legible; the wrapper
+   scrolls horizontally on narrow windows. */
+.daily-summary-table {
+  table-layout: auto;
+  min-width: 940px;
+}
+
+.daily-summary-table th,
+.daily-summary-table td {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+}
+
+.daily-summary-table th.num,
+.daily-summary-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-summary-table thead th {
+  white-space: normal;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.2;
+}
+
+.daily-summary-table thead th.num {
+  text-align: right;
+}
+
+/* Group banners (Stock In / Stock Out). */
+.daily-summary-table th.grp {
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.daily-summary-table th.grp-in,
+.daily-summary-table .sub-in {
+  color: var(--good);
+  background: rgba(79, 122, 99, 0.08);
+}
+
+.daily-summary-table th.grp-out,
+.daily-summary-table .sub-out {
+  color: var(--bad);
+  background: rgba(176, 82, 77, 0.08);
+}
+
+.daily-summary-table td.sub-in,
+.daily-summary-table td.sub-out {
+  color: var(--text);
+}
+
+.daily-summary-table th.total,
+.daily-summary-table td.total {
+  font-weight: 700;
+}
+
+.daily-summary-table td.in-total {
+  color: var(--good);
+}
+
+.daily-summary-table td.out-total {
+  color: var(--bad);
+}
+
+.daily-summary-table td.item-name {
+  font-weight: 600;
+  white-space: normal;
+}
+
+.daily-summary-table td.closing {
+  font-weight: 700;
+}
+
+/* ---- Excel import ---- */
+.import-help {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: var(--paper);
+}
+
+.import-help ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.import-help li {
+  margin-bottom: 6px;
+}
+
+.import-result-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.import-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.import-badge.good {
+  background: rgba(79, 122, 99, 0.14);
+  color: var(--good);
+}
+
+.import-badge.warn {
+  background: rgba(200, 178, 122, 0.2);
+  color: var(--gold-strong);
+}
+
+.import-badge.bad {
+  background: rgba(176, 82, 77, 0.14);
+  color: var(--bad);
+}
+
+.import-error-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: var(--bad);
+}
+
+.import-error-list li {
+  margin-bottom: 4px;
+}
+
+.import-row-no {
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* Measurement-basis pill on the Item Stock Ledger. */
+.basis-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(200, 178, 122, 0.18);
+  border: 1px solid rgba(200, 178, 122, 0.5);
+  color: var(--slate-700);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+/* ---- Voucher history (bottom of each voucher page) ---- */
+.voucher-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.voucher-history-head h3 {
+  margin: 0;
+}
+
+.voucher-history-table {
+  table-layout: auto;
+  min-width: 480px;
+}
+
+.voucher-history-table th,
+.voucher-history-table td {
+  white-space: nowrap;
+}
+
+.voucher-history-table th.num,
+.voucher-history-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.voucher-history-table tbody tr:hover {
+  background: var(--paper);
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+/* ---- Voucher detail modal ---- */
+.voucher-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(20, 27, 28, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+}
+
+.voucher-modal {
+  width: min(960px, 100%);
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 60px rgba(20, 27, 28, 0.4);
+  padding: 20px 22px;
+}
+
+.voucher-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.voucher-modal-head h3 {
+  margin: 0;
+}
+
+.voucher-modal-close {
+  background: transparent;
+  color: var(--slate-600);
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 10px;
+  border-radius: 8px;
+}
+
+.voucher-modal-close:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--bad);
+}
+
+.voucher-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 18px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.voucher-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voucher-meta span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-600);
+  font-weight: 700;
+}
+
+.voucher-meta strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.voucher-detail-table {
+  table-layout: auto;
+  min-width: 640px;
+}
+
+.voucher-detail-table th,
+.voucher-detail-table td {
+  white-space: nowrap;
+}
+
+.voucher-detail-table th.num,
+.voucher-detail-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.voucher-modal-totals {
+  display: flex;
+  gap: 28px;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.voucher-modal-totals > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.voucher-modal-totals span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-600);
+  font-weight: 700;
+}
+
+.voucher-modal-totals strong {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.voucher-modal-totals .grand strong {
+  font-size: 18px;
+  color: var(--good);
 }
 
 .inline-form {

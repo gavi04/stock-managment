@@ -3,6 +3,8 @@ import { handleGridKeyNav } from '../utils/gridKeyNav.js';
 import { todayDdmmyyyy } from '../utils/dateFormat.js';
 import { handleFormKeyNav } from '../utils/formKeyNav.js';
 import { emptyVoucherRow, recalcVoucherRow, applyProductToRow, rowHasQty, toItemPayload } from '../utils/voucherRow.js';
+import { VoucherHistory } from './VoucherHistory.jsx';
+import { useFocusFirstField } from '../utils/useFocusFirstField.js';
 
 const createEmptyRow = emptyVoucherRow;
 
@@ -20,6 +22,8 @@ export function SaleVoucherPanel({ products, parties, busy, onSave }) {
 
   const [items, setItems] = useState([createEmptyRow()]);
   const [error, setError] = useState(null);
+  const [historyKey, setHistoryKey] = useState(0);
+  const rootRef = useFocusFirstField();
 
   const gridRef = useRef(null);
 
@@ -96,6 +100,7 @@ export function SaleVoucherPanel({ products, parties, busy, onSave }) {
       setItems([createEmptyRow()]);
       const nextNo = await window.stockOps.getNextSaleVoucherNo();
       setVoucherNo(nextNo);
+      setHistoryKey((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to save voucher');
     }
@@ -105,7 +110,7 @@ export function SaleVoucherPanel({ products, parties, busy, onSave }) {
   const readonlyStyle = { ...inputStyle, background: '#f2f0ea', color: '#5d6a6e' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* HEADER */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -169,6 +174,7 @@ export function SaleVoucherPanel({ products, parties, busy, onSave }) {
               <tr>
                 <th style={{ width: '28px' }}>#</th>
                 <th style={{ width: '180px' }}>Item</th>
+                <th style={{ width: '130px' }}>Stock Name</th>
                 <th style={{ width: '62px' }}>HSN</th>
                 <th style={{ width: '52px' }}>Pcs</th>
                 <th style={{ width: '62px' }}>Qty</th>
@@ -191,6 +197,7 @@ export function SaleVoucherPanel({ products, parties, busy, onSave }) {
                       {products.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
                     </select>
                   </td>
+                  <td><input value={row.product_name} readOnly tabIndex={-1} style={readonlyStyle} /></td>
                   <td><input value={row.hsn} readOnly tabIndex={-1} style={readonlyStyle} /></td>
                   <td><input type="text" inputMode="decimal" value={row.pcs} disabled={row.unit_basis !== 'pcs'} onChange={e => handleRowChange(i, 'pcs', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 2)} style={row.unit_basis === 'pcs' ? inputStyle : readonlyStyle} /></td>
                   <td><input type="text" inputMode="decimal" value={row.quantity} disabled={row.unit_basis === 'pcs'} onChange={e => handleRowChange(i, 'quantity', e.target.value)} onKeyDown={e => handleKeyDown(e, i, 3)} style={row.unit_basis === 'pcs' ? readonlyStyle : inputStyle} /></td>
@@ -242,6 +249,8 @@ export function SaleVoucherPanel({ products, parties, busy, onSave }) {
           </button>
         </div>
       </section>
+
+      <VoucherHistory type="sale" refreshToken={historyKey} title="Recent Sales Vouchers" partyLabel="Customer" />
     </div>
   );
 }

@@ -4,11 +4,15 @@
 //   Left / Right -> previous / next editable cell in the row, but ONLY when the
 //                   text caret is already at the start / end of the field, so
 //                   left/right still move the cursor while you're editing.
-//   Enter        -> next editable cell (row by row); appends a new row at the end.
+//   Enter        -> next editable cell (row by row). At the very end it appends a
+//                   new row ONLY if the last row has data; on an empty row it
+//                   stops instead of spawning blank rows.
 //
 // For caret detection to work, numeric cells must be <input type="text"
 // inputMode="decimal"> — type="number" throws when reading selectionStart in
 // Chromium, which would make left/right always jump and break editing.
+
+import { focusAdjacent } from './focusScope.js';
 
 const FOCUSABLE = 'input:not([readonly]):not([disabled]), select:not([disabled])';
 
@@ -16,8 +20,24 @@ function firstFocusable(cell) {
   return cell ? cell.querySelector(FOCUSABLE) : null;
 }
 
+// Pop a <select> open when we land on it, so item dropdowns behave like the
+// master forms — the list appears without a second keystroke.
+function openIfSelect(el) {
+  if (el.tagName === 'SELECT' && typeof el.showPicker === 'function') {
+    try {
+      el.showPicker();
+    } catch {
+      /* needs user activation / already open */
+    }
+  }
+}
+
 function place(el, caret) {
   el.focus();
+  if (el.tagName === 'SELECT') {
+    openIfSelect(el);
+    return;
+  }
   if (caret === 'start' || caret === 'end') {
     if (typeof el.setSelectionRange === 'function') {
       try {
@@ -64,6 +84,31 @@ function moveCell(el, direction) {
   return false;
 }
 
+// Does the row containing `el` hold any real data? A row counts as empty when no
+// item is picked and every editable input is blank or a bare zero. Used to stop
+// Enter from appending blank rows on top of an already-empty row.
+function rowHasData(el) {
+  const tr = el.closest('tr');
+  if (!tr) return true; // can't tell — don't change append behaviour
+  const select = tr.querySelector('select');
+  if (select && select.value) return true;
+  for (const inp of tr.querySelectorAll('input:not([type=hidden])')) {
+    const v = (inp.value || '').trim();
+    if (v && v !== '0' && v !== '0.00' && v !== '0.000') return true;
+  }
+  return false;
+}
+
+// Is `el` at the grid's outer edge — the very first (dir -1) or very last
+// (dir +1) focusable cell — so an arrow past it should cross into the next
+// section rather than staying inside the grid?
+function isEdgeFocusable(el, dir) {
+  const tbody = el.closest('tbody');
+  if (!tbody) return false;
+  const all = [...tbody.querySelectorAll(FOCUSABLE)];
+  return dir > 0 ? all[all.length - 1] === el : all[0] === el;
+}
+
 function atBoundary(el, side) {
   if (el.tagName === 'SELECT') return true; // no text caret
   let start;
@@ -93,10 +138,16 @@ export function handleGridKeyNav(e, { onAppendRow } = {}) {
       moveRow(el, -1);
       return;
     case 'ArrowRight':
-      if (atBoundary(el, 'end') && moveCell(el, 1)) e.preventDefault();
+      if (atBoundary(el, 'end')) {
+        if (moveCell(el, 1)) e.preventDefault();
+        else if (isEdgeFocusable(el, 1) && focusAdjacent(el, 1, 'start')) e.preventDefault();
+      }
       return;
     case 'ArrowLeft':
-      if (atBoundary(el, 'start') && moveCell(el, -1)) e.preventDefault();
+      if (atBoundary(el, 'start')) {
+        if (moveCell(el, -1)) e.preventDefault();
+        else if (isEdgeFocusable(el, -1) && focusAdjacent(el, -1, 'end')) e.preventDefault();
+      }
       return;
     case 'Enter': {
       e.preventDefault();
@@ -106,8 +157,14 @@ export function handleGridKeyNav(e, { onAppendRow } = {}) {
       const i = all.indexOf(el);
       if (i > -1 && i < all.length - 1) {
         place(all[i + 1], 'select');
-      } else if (onAppendRow) {
+      } else if (onAppendRow && rowHasData(el)) {
+        // Only grow the grid when the last row actually has data; pressing Enter
+        // on a trailing empty row should not keep spawning blank rows.
         onAppendRow();
+      } else {
+        // Trailing empty row: cross into the next section (e.g. the footer /
+        // Save area) instead of adding another blank row.
+        focusAdjacent(el, 1, 'select');
       }
       return;
     }

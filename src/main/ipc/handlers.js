@@ -1,6 +1,7 @@
-import { ipcMain } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { AuthService } from '../services/authService.js';
+import { ImportService } from '../services/importService.js';
 import { categoryService, hsnService, partyService, productService, unitService, warehouseService } from '../services/lookupServices.js';
 import { productionFormulaService } from '../services/productionFormulaService.js';
 import { InventoryService } from '../services/inventoryService.js';
@@ -10,6 +11,7 @@ import { AuditService } from '../services/auditService.js';
 import { VoucherService } from '../services/voucherService.js';
 
 const authService = new AuthService();
+const importService = new ImportService();
 const inventoryService = new InventoryService();
 const reportService = new ReportService();
 const backupService = new BackupService();
@@ -32,6 +34,7 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(IPC_CHANNELS.AUTH_LOGIN, async (_event, payload) => authService.login(payload));
   ipcMain.handle(IPC_CHANNELS.AUTH_CREATE_USER, async (_event, payload) => authService.createUser(payload));
+  ipcMain.handle(IPC_CHANNELS.AUTH_RESET_PASSWORD, async (_event, payload) => authService.resetPassword(payload));
 
   ipcMain.handle(IPC_CHANNELS.MASTER_LIST, async (_event, { entity, filters }) => {
     return servicesByEntity[entity].list(filters);
@@ -77,6 +80,25 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_SAVE, async (_event, payload) => voucherService.savePurchaseReturnVoucher(payload));
   ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO, async () => voucherService.getNextPurchaseReturnVoucherNo());
+
+  ipcMain.handle(IPC_CHANNELS.VOUCHER_LIST_RECENT, async (_event, { type, limit = 20 } = {}) => voucherService.listVouchers(type, limit));
+  ipcMain.handle(IPC_CHANNELS.VOUCHER_GET_DETAIL, async (_event, { type, id } = {}) => voucherService.getVoucher(type, id));
+
+  ipcMain.handle(IPC_CHANNELS.IMPORT_EXCEL, async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const picked = await dialog.showOpenDialog(win ?? undefined, {
+      title: 'Select the data import Excel file',
+      properties: ['openFile'],
+      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
+    });
+
+    if (picked.canceled || !picked.filePaths?.length) {
+      return { canceled: true };
+    }
+
+    const summary = await importService.importWorkbook(picked.filePaths[0]);
+    return { canceled: false, summary };
+  });
 
   ipcMain.handle(IPC_CHANNELS.PARTY_GET_NEXT_CODE, async () => partyService.getNextCode());
 

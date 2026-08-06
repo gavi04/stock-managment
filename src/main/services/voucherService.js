@@ -1,5 +1,17 @@
 import { getPrismaClient } from '../db/database.js';
+import { AppError } from '../utils/errors.js';
 import { z } from 'zod';
+
+// Shared config for the voucher header models: which Prisma model, which date
+// field, and the party relation (supplier/customer). Used by both the history
+// list and the single-voucher detail lookup.
+const VOUCHER_MODELS = {
+  purchase: { model: 'purchase', dateField: 'purchaseDate', partyRel: 'supplier', kind: 'trade' },
+  sale: { model: 'sale', dateField: 'saleDate', partyRel: 'customer', kind: 'trade' },
+  sale_return: { model: 'saleReturn', dateField: 'returnDate', partyRel: 'customer', kind: 'trade' },
+  purchase_return: { model: 'purchaseReturn', dateField: 'returnDate', partyRel: 'supplier', kind: 'trade' },
+  production: { model: 'production', dateField: 'productionDate', partyRel: null, kind: 'production' }
+};
 
 const purchaseItemSchema = z
   .object({
@@ -434,6 +446,111 @@ export class VoucherService {
     });
 
     return { id: prodId, voucher_no: payload.voucher_no };
+  }
+
+  // History for the voucher screens: the most recently created vouchers of a
+  // given type, summarised (no line items). Ordered newest-first.
+  async listVouchers(type, limit = 20) {
+    const config = VOUCHER_MODELS[type];
+
+    if (!config) {
+      throw new Error(`Unknown voucher type: ${type}`);
+    }
+
+    const include = { _count: { select: { items: true } } };
+    if (config.partyRel) {
+      include[config.partyRel] = { select: { name: true } };
+    }
+
+    const rows = await getPrismaClient()[config.model].findMany({
+      where: { deletedAt: null },
+      include,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(limit) || 20, 100)
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      voucher_no: row.voucherNo,
+      date: row[config.dateField],
+      party: config.partyRel ? row[config.partyRel]?.name ?? '' : '',
+      items_count: row._count?.items ?? 0,
+      total_amount: row.totalAmount ?? null,
+      created_at: row.createdAt
+    }));
+  }
+
+  // Full detail for one voucher (header + line items with product names), for the
+  // "click a history row to view it" flow.
+  async getVoucher(type, id) {
+    const config = VOUCHER_MODELS[type];
+    if (!config) {
+      throw new Error(`Unknown voucher type: ${type}`);
+    }
+
+    const include = { items: { include: { product: { select: { name: true, code: true } } } } };
+    if (config.partyRel) {
+      include[config.partyRel] = { select: { name: true } };
+    }
+
+    const row = await getPrismaClient()[config.model].findFirst({
+      where: { id: Number(id), deletedAt: null },
+      include
+    });
+
+    if (!row) {
+      throw new AppError('Voucher not found', 'VOUCHER_NOT_FOUND', 404);
+    }
+
+    const base = {
+      id: row.id,
+      type,
+      voucher_no: row.voucherNo,
+      date: row[config.dateField],
+      party: config.partyRel ? row[config.partyRel]?.name ?? '' : '',
+      remarks: row.remarks ?? ''
+    };
+
+    if (config.kind === 'production') {
+      return {
+        ...base,
+        is_recurring: row.isRecurring,
+        items: row.items.map((item) => ({
+          product_name: item.product?.name ?? '',
+          product_code: item.product?.code ?? '',
+          batch_no: item.batchNo ?? '',
+          issued_qty: item.issuedQty ?? 0,
+          issued_pcs: item.issuedPcs ?? 0,
+          production_qty: item.productionQty ?? 0,
+          production_pcs: item.productionPcs ?? 0
+        }))
+      };
+    }
+
+    return {
+      ...base,
+      invoice_no: row.invoiceNo ?? '',
+      batch_no: row.batchNo ?? '',
+      vehicle_no: row.vehicleNo ?? '',
+      bilty_no: row.biltyNo ?? '',
+      broker: row.broker ?? '',
+      taxable_value: row.taxableValue ?? 0,
+      gst_amount: row.gstAmount ?? 0,
+      total_amount: row.totalAmount ?? 0,
+      items: row.items.map((item) => ({
+        product_name: item.product?.name ?? item.productName ?? '',
+        product_code: item.product?.code ?? '',
+        hsn: item.hsn ?? '',
+        pcs: item.pcs ?? 0,
+        quantity: item.quantity ?? 0,
+        base_rate: item.baseRate ?? 0,
+        net_rate: item.netRate ?? 0,
+        taxable_value: item.taxableValue ?? 0,
+        gst_rate: item.gstRate ?? 0,
+        gst_amount: item.gstAmount ?? 0,
+        amount: item.amount ?? 0
+      }))
+    };
   }
 
   async getProductionSettings() {

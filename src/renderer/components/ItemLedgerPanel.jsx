@@ -43,6 +43,7 @@ export function ItemLedgerPanel({ products }) {
   }, [selectedProductId]);
 
   const currentBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0;
+  const basisLabel = selectedProduct?.unit_basis === 'pcs' ? 'Pcs' : 'Quantity';
 
   return (
     <div className="ledger-view" style={{ display: 'grid', gap: '14px', minWidth: 0 }}>
@@ -71,10 +72,13 @@ export function ItemLedgerPanel({ products }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div>
               <h2 style={{ marginBottom: 0 }}>{selectedProduct.name}</h2>
-              <p className="stock-hint" style={{ marginTop: '4px' }}>Code: {selectedProduct.code}</p>
+              <p className="stock-hint" style={{ marginTop: '4px' }}>
+                Code: {selectedProduct.code}
+                <span className="basis-badge">Measured by: {basisLabel}</span>
+              </p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p className="stock-hint" style={{ margin: 0 }}>Current Balance</p>
+              <p className="stock-hint" style={{ margin: 0 }}>Current Balance ({basisLabel})</p>
               <h3 style={{ margin: '4px 0 0', fontSize: '32px', color: 'var(--title)' }}>
                 {Number(currentBalance).toFixed(3)}
               </h3>
@@ -92,9 +96,9 @@ export function ItemLedgerPanel({ products }) {
                   <th>Date</th>
                   <th>Voucher</th>
                   <th>Type</th>
-                  <th>In</th>
-                  <th>Out</th>
-                  <th>Balance</th>
+                  <th>In ({basisLabel})</th>
+                  <th>Out ({basisLabel})</th>
+                  <th>Balance ({basisLabel})</th>
                 </tr>
               </thead>
               <tbody>

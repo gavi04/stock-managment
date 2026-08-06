@@ -17,6 +17,7 @@ import { CodesUnitsPanel } from './components/CodesUnitsPanel.jsx';
 import { ProductionFormulaPanel } from './components/ProductionFormulaPanel.jsx';
 import { ItemLedgerPanel } from './components/ItemLedgerPanel.jsx';
 import { DailyStockSummaryPanel } from './components/DailyStockSummaryPanel.jsx';
+import { DataImportPanel } from './components/DataImportPanel.jsx';
 
 export default function App() {
   const {
@@ -110,14 +111,30 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.createUser({
+      const result = await window.stockOps.createUser({
         fullName: values.fullName,
         username: values.username,
         password: values.password
       });
       await window.stockOps.getBootstrapStatus().then(setBootstrapStatus);
+      return result?.recoveryCode ?? null; // shown once by AuthForm
     } catch (bootstrapError) {
       setError(bootstrapError.message || 'Unable to create admin');
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResetPassword = async (values) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await window.stockOps.resetPassword(values);
+      return result?.recoveryCode ?? null; // new code shown once by AuthForm
+    } catch (resetError) {
+      setError(resetError.message || 'Unable to reset password');
+      return null;
     } finally {
       setBusy(false);
     }
@@ -343,6 +360,10 @@ export default function App() {
       return <CodesUnitsPanel units={units} onRefresh={refreshMasters} />;
     }
 
+    if (activeView === 'data-import') {
+      return <DataImportPanel onRefresh={refreshMasters} />;
+    }
+
     if (activeView === 'production-formula') {
       return <ProductionFormulaPanel formulas={formulas} products={products} onRefresh={refreshMasters} />;
     }
@@ -443,6 +464,7 @@ export default function App() {
             busy={busy}
             onLogin={handleLogin}
             onBootstrap={handleBootstrap}
+            onReset={handleResetPassword}
           />
           {error ? <p className="error-message">{error}</p> : null}
         </>
