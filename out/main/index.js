@@ -995,6 +995,8 @@ const IPC_CHANNELS = {
   AUDIT_RECENT: "stockops:audit-recent",
   STOCK_ITEM_LEDGER: "stockops:stock-item-ledger",
   REPORT_DAILY_SUMMARY: "stockops:report-daily-summary",
+  REPORT_DAILY_BREAKDOWN: "stockops:report-daily-breakdown",
+  REPORT_DAILY_EXPORT: "stockops:report-daily-export",
   VOUCHER_PURCHASE_SAVE: "stockops:voucher-purchase-save",
   VOUCHER_PURCHASE_GET_NEXT_NO: "stockops:voucher-purchase-get-next-no",
   PARTY_GET_NEXT_CODE: "stockops:party-get-next-code",
@@ -1010,8 +1012,10 @@ const IPC_CHANNELS = {
   VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no",
   VOUCHER_LIST_RECENT: "stockops:voucher-list-recent",
   VOUCHER_GET_DETAIL: "stockops:voucher-get-detail",
+  VOUCHER_UPDATE: "stockops:voucher-update",
   IMPORT_EXCEL: "stockops:import-excel",
-  UPDATE_CHECK: "stockops:update-check"
+  UPDATE_CHECK: "stockops:update-check",
+  VOUCHER_PRINT: "stockops:voucher-print"
 };
 class AppError extends Error {
   constructor(message, code = "APP_ERROR", status = 400, details = null) {
@@ -1608,7 +1612,10 @@ class InventoryService {
       };
     });
   }
-  async getDailyStockSummary(filters = {}) {
+  // Day-by-day rows per item for the range (used by the drill-down popup). Also
+  // returns the pre-range balance per item (= closing of the day before "from")
+  // and the product-name map, which the per-item summary builds on.
+  async computeDailyRows(filters = {}) {
     const prisma2 = getPrismaClient();
     const { fromDate, toDate, productId, categoryId } = filters;
     const productWhere = { deletedAt: null, isActive: true };
@@ -1620,12 +1627,13 @@ class InventoryService {
     const rangeEnd = endOfDayUtc(to);
     const products = await prisma2.product.findMany({
       where: productWhere,
-      select: { id: true, name: true }
+      select: { id: true, name: true, code: true }
     });
     const productIds = products.map((product) => product.id);
     const productNameById = new Map(products.map((product) => [product.id, product.name]));
+    const productCodeById = new Map(products.map((product) => [product.id, product.code]));
     if (productIds.length === 0) {
-      return [];
+      return { dailyRows: [], preRange: /* @__PURE__ */ new Map(), productNameById, productCodeById, openingInRange: /* @__PURE__ */ new Map() };
     }
     const openingAgg = await prisma2.stockTransaction.groupBy({
       by: ["productId"],
@@ -1636,6 +1644,7 @@ class InventoryService {
     for (const row of openingAgg) {
       runningBalance.set(row.productId, Number(row._sum.quantity ?? 0));
     }
+    const preRange = new Map(runningBalance);
     const rangeTxns = await prisma2.stockTransaction.findMany({
       where: {
         productId: { in: productIds },
@@ -1656,10 +1665,12 @@ class InventoryService {
       select: { productId: true, quantity: true, createdAt: true }
     });
     const openingByKey = /* @__PURE__ */ new Map();
+    const openingInRange = /* @__PURE__ */ new Map();
     for (const txn of openingTxns) {
       const date = txn.createdAt.toISOString().slice(0, 10);
       const key = `${date}::${txn.productId}`;
       openingByKey.set(key, (openingByKey.get(key) ?? 0) + Number(txn.quantity));
+      openingInRange.set(txn.productId, (openingInRange.get(txn.productId) ?? 0) + Number(txn.quantity));
     }
     const buckets = /* @__PURE__ */ new Map();
     for (const txn of rangeTxns) {
@@ -1738,6 +1749,88 @@ class InventoryService {
       });
       runningBalance.set(bucket.product_id, closing);
     }
+    return { dailyRows: result, preRange, productNameById, productCodeById, openingInRange };
+  }
+  // Day-by-day breakdown for the drill-down popup (pass a productId in filters).
+  async getDailyStockBreakdown(filters = {}) {
+    const { dailyRows } = await this.computeDailyRows(filters);
+    return dailyRows;
+  }
+  // One summarised row per item for the range: OPENING = closing of the day
+  // before "from", the in/out totals across the range, CLOSING = balance on the
+  // "to" date. Items that have a balance but no movement in the range are shown
+  // with opening = closing.
+  async getDailyStockSummary(filters = {}) {
+    const { dailyRows, preRange, productNameById, productCodeById, openingInRange } = await this.computeDailyRows(filters);
+    const byProduct = /* @__PURE__ */ new Map();
+    for (const row of dailyRows) {
+      let sum = byProduct.get(row.product_id);
+      if (!sum) {
+        sum = {
+          product_id: row.product_id,
+          purchase: 0,
+          sale_return: 0,
+          production_in: 0,
+          sale: 0,
+          purchase_return: 0,
+          issue: 0,
+          total_in: 0,
+          total_out: 0,
+          closing: 0
+        };
+        byProduct.set(row.product_id, sum);
+      }
+      sum.purchase += row.purchase;
+      sum.sale_return += row.sale_return;
+      sum.production_in += row.production_in;
+      sum.sale += row.sale;
+      sum.purchase_return += row.purchase_return;
+      sum.issue += row.issue;
+      sum.total_in += row.total_in;
+      sum.total_out += row.total_out;
+      sum.closing = row.closing;
+    }
+    const result = [];
+    for (const [productId, name] of productNameById) {
+      const opening = (preRange.get(productId) ?? 0) + (openingInRange.get(productId) ?? 0);
+      const sum = byProduct.get(productId);
+      const code = productCodeById.get(productId) ?? "";
+      if (!sum) {
+        if (Math.abs(opening) < 1e-9) continue;
+        result.push({
+          product_id: productId,
+          item: name,
+          code,
+          opening,
+          purchase: 0,
+          sale_return: 0,
+          production_in: 0,
+          total_in: 0,
+          sale: 0,
+          purchase_return: 0,
+          issue: 0,
+          total_out: 0,
+          closing: opening
+        });
+        continue;
+      }
+      result.push({
+        product_id: productId,
+        item: name,
+        code,
+        opening,
+        purchase: sum.purchase,
+        sale_return: sum.sale_return,
+        production_in: sum.production_in,
+        total_in: sum.total_in,
+        sale: sum.sale,
+        purchase_return: sum.purchase_return,
+        issue: sum.issue,
+        total_out: sum.total_out,
+        closing: sum.closing
+      });
+    }
+    result.sort((a, b) => String(a.code).localeCompare(String(b.code)));
     return result;
   }
 }
@@ -1960,235 +2053,57 @@ class ImportService {
     return created.id;
   }
 }
-const { autoUpdater } = electronUpdater;
-let manualCheck = false;
-let initialised = false;
-function activeWindow() {
-  return electron.BrowserWindow.getFocusedWindow() ?? electron.BrowserWindow.getAllWindows()[0] ?? null;
-}
-function initAutoUpdater() {
-  if (initialised) return;
-  initialised = true;
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.logger = logger;
-  autoUpdater.on("update-available", async (info) => {
-    const { response } = await electron.dialog.showMessageBox(activeWindow(), {
-      type: "info",
-      title: "Update available",
-      message: `A new version of StockOps (${info.version}) is available.`,
-      detail: "Would you like to download it now? Your data will not be affected.",
-      buttons: ["Download", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true
-    });
-    manualCheck = false;
-    if (response === 0) {
-      autoUpdater.downloadUpdate().catch((err) => reportError(err));
-    }
-  });
-  autoUpdater.on("update-not-available", () => {
-    if (manualCheck) {
-      electron.dialog.showMessageBox(activeWindow(), {
-        type: "info",
-        title: "No updates",
-        message: `StockOps ${electron.app.getVersion()} is the latest version.`,
-        buttons: ["OK"],
-        noLink: true
-      });
-    }
-    manualCheck = false;
-  });
-  autoUpdater.on("update-downloaded", async (info) => {
-    const { response } = await electron.dialog.showMessageBox(activeWindow(), {
-      type: "info",
-      title: "Update ready",
-      message: `Version ${info.version} has been downloaded.`,
-      detail: "Restart StockOps now to install it? You can also keep working and it will install next time you close the app.",
-      buttons: ["Restart now", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true
-    });
-    if (response === 0) {
-      setImmediate(() => autoUpdater.quitAndInstall());
-    }
-  });
-  autoUpdater.on("error", (err) => reportError(err));
-}
-function reportError(err) {
-  logger.error("auto-update error", { message: err?.message });
-  if (manualCheck) {
-    electron.dialog.showMessageBox(activeWindow(), {
-      type: "error",
-      title: "Update check failed",
-      message: "Could not check for updates.",
-      detail: err?.message || String(err),
-      buttons: ["OK"],
-      noLink: true
-    });
-  }
-  manualCheck = false;
-}
-function checkForUpdates({ manual = false } = {}) {
-  if (!electron.app.isPackaged) {
-    if (manual) {
-      electron.dialog.showMessageBox(activeWindow(), {
-        type: "info",
-        title: "Updates",
-        message: "Update checks only run in the installed app, not in development.",
-        buttons: ["OK"],
-        noLink: true
-      });
-    }
-    return;
-  }
-  initAutoUpdater();
-  manualCheck = manual;
-  autoUpdater.checkForUpdates().catch((err) => reportError(err));
-}
-function deserialize(row) {
-  if (!row) return row;
-  let lines = [];
-  try {
-    lines = JSON.parse(row.lines_json || "[]");
-  } catch {
-    lines = [];
-  }
-  return { ...row, lines };
-}
-function normalizeLines(lines) {
-  return (Array.isArray(lines) ? lines : []).filter((l) => l && l.product_id).map((l) => ({
-    product_id: Number(l.product_id),
-    kind: l.kind === "produce" ? "produce" : "issue",
-    quantity: Number(l.quantity) || 0,
-    pcs: Number(l.pcs) || 0
-  }));
-}
-class ProductionFormulaService {
-  constructor(repository) {
-    this.repository = repository;
-  }
-  async list(filters = {}) {
-    const rows = await this.repository.findPage(filters);
-    return rows.map(deserialize);
-  }
-  async get(id) {
-    const row = await this.repository.findById(id);
-    if (!row) throw new AppError("Formula not found", "ENTITY_NOT_FOUND", 404);
-    return deserialize(row);
-  }
-  buildData(payload) {
-    const lines = normalizeLines(payload.lines);
-    return { name: String(payload.name || "").trim(), lines_json: JSON.stringify(lines) };
-  }
-  async create(payload) {
-    if (!String(payload.name || "").trim()) {
-      throw new AppError("Formula name is required", "VALIDATION_ERROR", 400);
-    }
-    const data = this.buildData(payload);
-    data.code = payload.code ? String(payload.code).trim() : `FRM-${Date.now().toString().slice(-6)}`;
-    return deserialize(await this.repository.create(data));
-  }
-  async update(id, payload) {
-    const data = this.buildData(payload);
-    if (payload.code) data.code = String(payload.code).trim();
-    const updated = await this.repository.update(id, data);
-    if (!updated) throw new AppError("Formula not found", "ENTITY_NOT_FOUND", 404);
-    return deserialize(updated);
-  }
-  remove(id) {
-    return this.repository.softDelete(id);
-  }
-}
-const productionFormulaService = new ProductionFormulaService(productionFormulasRepository);
-class ReportService {
-  exportCsv(rows) {
-    return sync.stringify(rows, { header: true });
-  }
-  async exportExcel(rows, sheetName = "Report") {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(sheetName);
-    if (rows.length > 0) {
-      worksheet.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
-      worksheet.addRows(rows);
-    }
-    return workbook.xlsx.writeBuffer();
-  }
-  exportPdf(rows, title = "Report") {
-    return new Promise((resolve) => {
-      const chunks = [];
-      const doc = new PDFDocument({ margin: 32 });
-      doc.on("data", (chunk) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.fontSize(18).text(title);
-      doc.moveDown();
-      rows.forEach((row) => {
-        doc.fontSize(10).text(JSON.stringify(row));
-      });
-      doc.end();
-    });
-  }
-}
-class BackupService {
-  getBackupDir() {
-    const backupDir = path.join(electron.app.getPath("userData"), "backups");
-    ensureDirectory(backupDir);
-    return backupDir;
-  }
-  createBackup() {
-    const source = getDatabasePath();
-    const backupName = `stockops-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.db`;
-    const target = path.join(this.getBackupDir(), backupName);
-    fs.copyFileSync(source, target);
-    return { path: target };
-  }
-  restoreBackup(backupPath) {
-    const target = getDatabasePath();
-    fs.copyFileSync(backupPath, target);
-    return { path: target };
-  }
-}
-class AuditLogsRepository extends BaseRepository {
-  constructor() {
-    super("auditLog");
-  }
-  async createLog(payload) {
-    const row = await this.model.create({ data: fromWire(payload) });
-    return toWire(row);
-  }
-  async recent(limit = 100) {
-    const rows = await this.model.findMany({
-      orderBy: { id: "desc" },
-      take: Number(limit)
-    });
-    return toWire(rows);
-  }
-}
-const auditLogsRepository = new AuditLogsRepository();
-class AuditService {
-  log(entry) {
-    return auditLogsRepository.createLog({
-      actor_user_id: entry.actorUserId ?? null,
-      action: entry.action,
-      entity_type: entry.entityType,
-      entity_id: entry.entityId ?? null,
-      payload_json: JSON.stringify(entry.payload ?? {}),
-      ip_address: entry.ipAddress ?? null,
-      user_agent: entry.userAgent ?? null
-    });
-  }
-  recent(limit = 100) {
-    return auditLogsRepository.recent(limit);
-  }
-}
 const VOUCHER_MODELS = {
-  purchase: { model: "purchase", dateField: "purchaseDate", partyRel: "supplier", kind: "trade" },
-  sale: { model: "sale", dateField: "saleDate", partyRel: "customer", kind: "trade" },
-  sale_return: { model: "saleReturn", dateField: "returnDate", partyRel: "customer", kind: "trade" },
-  purchase_return: { model: "purchaseReturn", dateField: "returnDate", partyRel: "supplier", kind: "trade" },
-  production: { model: "production", dateField: "productionDate", partyRel: null, kind: "production" }
+  purchase: {
+    model: "purchase",
+    dateField: "purchaseDate",
+    partyRel: "supplier",
+    partyIdField: "supplierId",
+    kind: "trade",
+    itemModel: "purchaseItem",
+    itemFk: "purchaseId",
+    saveMethod: "savePurchaseVoucher"
+  },
+  sale: {
+    model: "sale",
+    dateField: "saleDate",
+    partyRel: "customer",
+    partyIdField: "customerId",
+    kind: "trade",
+    itemModel: "saleItem",
+    itemFk: "saleId",
+    saveMethod: "saveSaleVoucher"
+  },
+  sale_return: {
+    model: "saleReturn",
+    dateField: "returnDate",
+    partyRel: "customer",
+    partyIdField: "customerId",
+    kind: "trade",
+    itemModel: "saleReturnItem",
+    itemFk: "saleReturnId",
+    saveMethod: "saveSaleReturnVoucher"
+  },
+  purchase_return: {
+    model: "purchaseReturn",
+    dateField: "returnDate",
+    partyRel: "supplier",
+    partyIdField: "supplierId",
+    kind: "trade",
+    itemModel: "purchaseReturnItem",
+    itemFk: "purchaseReturnId",
+    saveMethod: "savePurchaseReturnVoucher"
+  },
+  production: {
+    model: "production",
+    dateField: "productionDate",
+    partyRel: null,
+    partyIdField: null,
+    kind: "production",
+    itemModel: "productionItem",
+    itemFk: "productionId",
+    saveMethod: "saveProductionVoucher"
+  }
 };
 const purchaseItemSchema = zod.z.object({
   product_id: zod.z.coerce.number().int().positive(),
@@ -2610,7 +2525,9 @@ class VoucherService {
     if (!config2) {
       throw new Error(`Unknown voucher type: ${type}`);
     }
-    const include = { items: { include: { product: { select: { name: true, code: true } } } } };
+    const include = {
+      items: { include: { product: { select: { name: true, code: true, unitBasis: true } } } }
+    };
     if (config2.partyRel) {
       include[config2.partyRel] = { select: { name: true } };
     }
@@ -2627,6 +2544,7 @@ class VoucherService {
       voucher_no: row.voucherNo,
       date: row[config2.dateField],
       party: config2.partyRel ? row[config2.partyRel]?.name ?? "" : "",
+      party_id: config2.partyIdField ? row[config2.partyIdField] ?? null : null,
       remarks: row.remarks ?? ""
     };
     if (config2.kind === "production") {
@@ -2634,6 +2552,7 @@ class VoucherService {
         ...base,
         is_recurring: row.isRecurring,
         items: row.items.map((item) => ({
+          product_id: item.productId,
           product_name: item.product?.name ?? "",
           product_code: item.product?.code ?? "",
           batch_no: item.batchNo ?? "",
@@ -2648,6 +2567,7 @@ class VoucherService {
       ...base,
       invoice_no: row.invoiceNo ?? "",
       batch_no: row.batchNo ?? "",
+      expiry_date: row.expiryDate ?? "",
       vehicle_no: row.vehicleNo ?? "",
       bilty_no: row.biltyNo ?? "",
       broker: row.broker ?? "",
@@ -2655,12 +2575,15 @@ class VoucherService {
       gst_amount: row.gstAmount ?? 0,
       total_amount: row.totalAmount ?? 0,
       items: row.items.map((item) => ({
+        product_id: item.productId,
         product_name: item.product?.name ?? item.productName ?? "",
         product_code: item.product?.code ?? "",
+        unit_basis: item.product?.unitBasis === "pcs" ? "pcs" : "quantity",
         hsn: item.hsn ?? "",
         pcs: item.pcs ?? 0,
         quantity: item.quantity ?? 0,
         base_rate: item.baseRate ?? 0,
+        size_diff: item.sizeDiff ?? 0,
         net_rate: item.netRate ?? 0,
         taxable_value: item.taxableValue ?? 0,
         gst_rate: item.gstRate ?? 0,
@@ -2668,6 +2591,34 @@ class VoucherService {
         amount: item.amount ?? 0
       }))
     };
+  }
+  // Edit a saved voucher, keeping its number. To avoid any chance of losing the
+  // voucher if the new data is invalid, we build the replacement FIRST under a
+  // temporary number (this validates it and lays down fresh stock rows), then in
+  // one transaction remove the old voucher + its stock and adopt the real number.
+  async updateVoucher(type, id, payload) {
+    const config2 = VOUCHER_MODELS[type];
+    if (!config2) {
+      throw new Error(`Unknown voucher type: ${type}`);
+    }
+    const prisma2 = getPrismaClient();
+    const existing = await prisma2[config2.model].findFirst({
+      where: { id: Number(id), deletedAt: null }
+    });
+    if (!existing) {
+      throw new AppError("Voucher not found", "VOUCHER_NOT_FOUND", 404);
+    }
+    const realNo = existing.voucherNo;
+    const tempNo = `${realNo}~EDIT~${Date.now()}`;
+    const created = await this[config2.saveMethod]({ ...payload, voucher_no: tempNo });
+    await prisma2.$transaction(async (tx) => {
+      await tx.stockTransaction.deleteMany({ where: { transactionNo: realNo } });
+      await tx[config2.itemModel].deleteMany({ where: { [config2.itemFk]: Number(id) } });
+      await tx[config2.model].delete({ where: { id: Number(id) } });
+      await tx[config2.model].update({ where: { id: created.id }, data: { voucherNo: realNo } });
+      await tx.stockTransaction.updateMany({ where: { transactionNo: tempNo }, data: { transactionNo: realNo } });
+    });
+    return { id: created.id, voucher_no: realNo };
   }
   async getProductionSettings() {
     const setting = await getPrismaClient().setting.findUnique({ where: { id: 1 } });
@@ -2685,8 +2636,587 @@ class VoucherService {
     return settingsJson;
   }
 }
+const tradeTemplate = `<!--
+  Print layout for Sale / Purchase / Sale Return / Purchase Return vouchers.
+  Edit this file freely as plain HTML + CSS. Tokens in {{DOUBLE_BRACES}} are filled
+  at print time. The single table row inside the tbody, wrapped by the ROW markers,
+  is repeated once per line item — edit that row's cells to change item columns.
+
+  Page tokens:  COMPANY_NAME, TITLE, DATE, SERIAL_NO, PARTY_LABEL, PARTY_NAME,
+                TERMS, GRAND_TOTAL
+  Row tokens:   SNO, ITEM_CODE, QTY, RATE, DIFF, TOTAL
+-->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>{{SERIAL_NO}}</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { width: 210mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 0; }
+  .company { text-align: center; font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
+  .doc-title { text-align: center; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 10px; }
+  .sheet { border: 1.5px solid #222; border-radius: 8px; padding: 16px 18px; }
+  .head { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 12px; }
+  .hf { display: flex; gap: 8px; align-items: baseline; }
+  .hf:nth-child(even) { justify-content: flex-end; }
+  .hf span { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: #333; }
+  .hf b { font-size: 13px; font-weight: 600; }
+  .hf b.dash { letter-spacing: 2px; color: #444; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th, table.grid td { border: 1px solid #333; padding: 6px 8px; font-size: 12px; }
+  table.grid th { background: #f2f0ea; text-align: left; font-size: 11px; letter-spacing: 0.03em; }
+  table.grid td.n, table.grid th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  table.grid td.c, table.grid th.c { text-align: center; }
+  table.grid tfoot td { font-weight: 800; font-size: 13px; }
+  .grand-label { letter-spacing: 0.05em; }
+  .foot { margin-top: 28px; display: flex; justify-content: space-between; font-size: 12px; color: #444; }
+  @page { size: A4; margin: 14mm; }
+</style>
+</head>
+<body>
+  <div class="company">{{COMPANY_NAME}}</div>
+  <div class="doc-title">{{TITLE}}</div>
+  <div class="sheet">
+    <div class="head">
+      <div class="hf"><span>DATE</span><b>{{DATE}}</b></div>
+      <div class="hf"><span>SERIAL NO.</span><b>{{SERIAL_NO}}</b></div>
+      <div class="hf"><span>{{PARTY_LABEL}}</span><b>{{PARTY_NAME}}</b></div>
+      <div class="hf"><span>TERMS</span><b class="dash">{{TERMS}}</b></div>
+    </div>
+    <table class="grid">
+      <thead>
+        <tr>
+          <th class="c">S.NO.</th>
+          <th>ITEM CODE</th>
+          <th class="n">QTY</th>
+          <th class="n">RATE</th>
+          <th class="n">DIFF</th>
+          <th class="n">TOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!--ROW-->
+        <tr>
+          <td class="c">{{SNO}}</td>
+          <td>{{ITEM_CODE}}</td>
+          <td class="n">{{QTY}}</td>
+          <td class="n">{{RATE}}</td>
+          <td class="n">{{DIFF}}</td>
+          <td class="n">{{TOTAL}}</td>
+        </tr>
+        <!--/ROW-->
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5" class="n grand-label">GRAND TOTAL</td>
+          <td class="n grand">{{GRAND_TOTAL}}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <div class="foot">
+    <span>Generated by StockOps</span>
+    <span>Authorised Signatory</span>
+  </div>
+</body>
+</html>
+`;
+const productionTemplate = `<!--
+  Print layout for Production vouchers. Same rules as voucher-template.html.
+
+  Page placeholders:  COMPANY_NAME, TITLE, DATE, SERIAL_NO, REMARKS
+  Per-row placeholders: SNO, ITEM_CODE, BATCH, ISSUED_QTY, ISSUED_PCS,
+                        PROD_QTY, PROD_PCS
+-->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>{{SERIAL_NO}}</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { width: 210mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 0; }
+  .company { text-align: center; font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
+  .doc-title { text-align: center; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 10px; }
+  .sheet { border: 1.5px solid #222; border-radius: 8px; padding: 16px 18px; }
+  .head { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 12px; }
+  .hf { display: flex; gap: 8px; align-items: baseline; }
+  .hf.full { grid-column: 1 / -1; }
+  .hf span { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: #333; }
+  .hf b { font-size: 13px; font-weight: 600; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th, table.grid td { border: 1px solid #333; padding: 6px 8px; font-size: 12px; }
+  table.grid th { background: #f2f0ea; text-align: left; font-size: 11px; letter-spacing: 0.03em; }
+  table.grid td.n, table.grid th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  table.grid td.c, table.grid th.c { text-align: center; }
+  .foot { margin-top: 28px; display: flex; justify-content: space-between; font-size: 12px; color: #444; }
+  @page { size: A4; margin: 14mm; }
+</style>
+</head>
+<body>
+  <div class="company">{{COMPANY_NAME}}</div>
+  <div class="doc-title">{{TITLE}}</div>
+  <div class="sheet">
+    <div class="head">
+      <div class="hf"><span>DATE</span><b>{{DATE}}</b></div>
+      <div class="hf" style="justify-content:flex-end"><span>SERIAL NO.</span><b>{{SERIAL_NO}}</b></div>
+      <div class="hf full"><span>REMARKS</span><b>{{REMARKS}}</b></div>
+    </div>
+    <table class="grid">
+      <thead>
+        <tr>
+          <th class="c">S.NO.</th>
+          <th>ITEM CODE</th>
+          <th>BATCH</th>
+          <th class="n">ISSUED QTY</th>
+          <th class="n">ISSUED PCS</th>
+          <th class="n">PROD. QTY</th>
+          <th class="n">PROD. PCS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!--ROW-->
+        <tr>
+          <td class="c">{{SNO}}</td>
+          <td>{{ITEM_CODE}}</td>
+          <td>{{BATCH}}</td>
+          <td class="n">{{ISSUED_QTY}}</td>
+          <td class="n">{{ISSUED_PCS}}</td>
+          <td class="n">{{PROD_QTY}}</td>
+          <td class="n">{{PROD_PCS}}</td>
+        </tr>
+        <!--/ROW-->
+      </tbody>
+    </table>
+  </div>
+  <div class="foot">
+    <span>Generated by StockOps</span>
+    <span>Authorised Signatory</span>
+  </div>
+</body>
+</html>
+`;
+const voucherService$1 = new VoucherService();
+const TITLES = {
+  purchase: "Purchase Voucher",
+  sale: "Sales Voucher",
+  sale_return: "Sales Return Voucher",
+  purchase_return: "Purchase Return Voucher",
+  production: "Production Voucher"
+};
+const PARTY_LABELS = {
+  purchase: "Supplier",
+  sale: "Party Name",
+  sale_return: "Party Name",
+  purchase_return: "Supplier"
+};
+const MIN_ROWS = 8;
+function esc(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+const n2 = (v) => Number(v || 0).toFixed(2);
+const n3 = (v) => Number(v || 0).toFixed(3);
+const itemQty = (it) => Number(it.quantity) > 0 ? n3(it.quantity) : Number(it.pcs) > 0 ? n3(it.pcs) : "-";
+function fill(str, values) {
+  return str.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] != null ? String(values[key]) : "");
+}
+function renderTemplate(template, pageValues, rowValues, minRows = 0) {
+  const re = /<!--ROW-->([\s\S]*?)<!--\/ROW-->/g;
+  let chosen = null;
+  let match;
+  while ((match = re.exec(template)) !== null) {
+    if (match[1].includes("<tr")) {
+      chosen = match;
+      break;
+    }
+  }
+  if (!chosen) return fill(template, pageValues);
+  const rowTpl = chosen[1];
+  let rows = rowValues.map((v) => fill(rowTpl, v)).join("");
+  for (let i = rowValues.length; i < minRows; i += 1) {
+    rows += fill(rowTpl, {});
+  }
+  const withRows = template.slice(0, chosen.index) + rows + template.slice(chosen.index + chosen[0].length);
+  return fill(withRows, pageValues);
+}
+function buildTradeHtml(voucher, companyName) {
+  const grand = voucher.items.reduce((sum, it) => sum + Number(it.taxable_value || 0), 0);
+  const pageValues = {
+    COMPANY_NAME: esc(companyName),
+    TITLE: esc(TITLES[voucher.type] || "Voucher"),
+    DATE: esc(voucher.date),
+    SERIAL_NO: esc(voucher.voucher_no),
+    PARTY_LABEL: esc((PARTY_LABELS[voucher.type] || "Party Name").toUpperCase()),
+    PARTY_NAME: esc(voucher.party),
+    TERMS: "—".repeat(10),
+    GRAND_TOTAL: n2(grand)
+  };
+  const rowValues = voucher.items.map((it, i) => ({
+    SNO: i + 1,
+    ITEM_CODE: esc(it.product_code || it.product_name || "-"),
+    QTY: itemQty(it),
+    RATE: n2(it.base_rate),
+    DIFF: n2(it.size_diff),
+    TOTAL: n2(it.taxable_value)
+  }));
+  return renderTemplate(tradeTemplate, pageValues, rowValues, MIN_ROWS);
+}
+function buildProductionHtml(voucher, companyName) {
+  const pageValues = {
+    COMPANY_NAME: esc(companyName),
+    TITLE: esc(TITLES.production),
+    DATE: esc(voucher.date),
+    SERIAL_NO: esc(voucher.voucher_no),
+    REMARKS: esc(voucher.remarks || "")
+  };
+  const rowValues = voucher.items.map((it, i) => ({
+    SNO: i + 1,
+    ITEM_CODE: esc(it.product_code || it.product_name || "-"),
+    BATCH: esc(it.batch_no || "-"),
+    ISSUED_QTY: n3(it.issued_qty),
+    ISSUED_PCS: n3(it.issued_pcs),
+    PROD_QTY: n3(it.production_qty),
+    PROD_PCS: n3(it.production_pcs)
+  }));
+  return renderTemplate(productionTemplate, pageValues, rowValues, MIN_ROWS);
+}
+function buildHtml(voucher, companyName) {
+  return voucher.type === "production" ? buildProductionHtml(voucher, companyName) : buildTradeHtml(voucher, companyName);
+}
+class PrintService {
+  async getCompanyName() {
+    try {
+      const setting = await getPrismaClient().setting.findUnique({ where: { id: 1 } });
+      return setting?.companyName || "StockOps";
+    } catch {
+      return "StockOps";
+    }
+  }
+  async printVoucher(type, id) {
+    const voucher = await voucherService$1.getVoucher(type, id);
+    const companyName = await this.getCompanyName();
+    const html = buildHtml(voucher, companyName);
+    const tmpFile = path.join(electron.app.getPath("temp"), `stockops-voucher-${Date.now()}.html`);
+    await fs.promises.writeFile(tmpFile, html, "utf8");
+    const win = new electron.BrowserWindow({
+      show: false,
+      width: 820,
+      height: 1160,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+    });
+    const cleanup = () => {
+      if (!win.isDestroyed()) win.close();
+      fs.promises.unlink(tmpFile).catch(() => {
+      });
+    };
+    try {
+      await win.loadFile(tmpFile);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const result = await new Promise((resolve) => {
+        win.webContents.print(
+          {
+            silent: false,
+            printBackground: true,
+            pageSize: "A4",
+            margins: { marginType: "default" }
+          },
+          (success, failureReason) => resolve({ success, failureReason })
+        );
+      });
+      return result;
+    } finally {
+      cleanup();
+    }
+  }
+}
+const { autoUpdater } = electronUpdater;
+let manualCheck = false;
+let initialised = false;
+function activeWindow() {
+  return electron.BrowserWindow.getFocusedWindow() ?? electron.BrowserWindow.getAllWindows()[0] ?? null;
+}
+function initAutoUpdater() {
+  if (initialised) return;
+  initialised = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = logger;
+  autoUpdater.on("update-available", async (info) => {
+    const { response } = await electron.dialog.showMessageBox(activeWindow(), {
+      type: "info",
+      title: "Update available",
+      message: `A new version of StockOps (${info.version}) is available.`,
+      detail: "Would you like to download it now? Your data will not be affected.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    manualCheck = false;
+    if (response === 0) {
+      autoUpdater.downloadUpdate().catch((err) => reportError(err));
+    }
+  });
+  autoUpdater.on("update-not-available", () => {
+    if (manualCheck) {
+      electron.dialog.showMessageBox(activeWindow(), {
+        type: "info",
+        title: "No updates",
+        message: `StockOps ${electron.app.getVersion()} is the latest version.`,
+        buttons: ["OK"],
+        noLink: true
+      });
+    }
+    manualCheck = false;
+  });
+  autoUpdater.on("update-downloaded", async (info) => {
+    const { response } = await electron.dialog.showMessageBox(activeWindow(), {
+      type: "info",
+      title: "Update ready",
+      message: `Version ${info.version} has been downloaded.`,
+      detail: "Restart StockOps now to install it? You can also keep working and it will install next time you close the app.",
+      buttons: ["Restart now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    if (response === 0) {
+      setImmediate(() => autoUpdater.quitAndInstall());
+    }
+  });
+  autoUpdater.on("error", (err) => reportError(err));
+}
+function reportError(err) {
+  logger.error("auto-update error", { message: err?.message });
+  if (manualCheck) {
+    electron.dialog.showMessageBox(activeWindow(), {
+      type: "error",
+      title: "Update check failed",
+      message: "Could not check for updates.",
+      detail: err?.message || String(err),
+      buttons: ["OK"],
+      noLink: true
+    });
+  }
+  manualCheck = false;
+}
+function checkForUpdates({ manual = false } = {}) {
+  if (!electron.app.isPackaged) {
+    if (manual) {
+      electron.dialog.showMessageBox(activeWindow(), {
+        type: "info",
+        title: "Updates",
+        message: "Update checks only run in the installed app, not in development.",
+        buttons: ["OK"],
+        noLink: true
+      });
+    }
+    return;
+  }
+  initAutoUpdater();
+  manualCheck = manual;
+  autoUpdater.checkForUpdates().catch((err) => reportError(err));
+}
+function deserialize(row) {
+  if (!row) return row;
+  let lines = [];
+  try {
+    lines = JSON.parse(row.lines_json || "[]");
+  } catch {
+    lines = [];
+  }
+  return { ...row, lines };
+}
+function normalizeLines(lines) {
+  return (Array.isArray(lines) ? lines : []).filter((l) => l && l.product_id).map((l) => ({
+    product_id: Number(l.product_id),
+    kind: l.kind === "produce" ? "produce" : "issue",
+    quantity: Number(l.quantity) || 0,
+    pcs: Number(l.pcs) || 0
+  }));
+}
+class ProductionFormulaService {
+  constructor(repository) {
+    this.repository = repository;
+  }
+  async list(filters = {}) {
+    const rows = await this.repository.findPage(filters);
+    return rows.map(deserialize);
+  }
+  async get(id) {
+    const row = await this.repository.findById(id);
+    if (!row) throw new AppError("Formula not found", "ENTITY_NOT_FOUND", 404);
+    return deserialize(row);
+  }
+  buildData(payload) {
+    const lines = normalizeLines(payload.lines);
+    return { name: String(payload.name || "").trim(), lines_json: JSON.stringify(lines) };
+  }
+  async create(payload) {
+    if (!String(payload.name || "").trim()) {
+      throw new AppError("Formula name is required", "VALIDATION_ERROR", 400);
+    }
+    const data = this.buildData(payload);
+    data.code = payload.code ? String(payload.code).trim() : `FRM-${Date.now().toString().slice(-6)}`;
+    return deserialize(await this.repository.create(data));
+  }
+  async update(id, payload) {
+    const data = this.buildData(payload);
+    if (payload.code) data.code = String(payload.code).trim();
+    const updated = await this.repository.update(id, data);
+    if (!updated) throw new AppError("Formula not found", "ENTITY_NOT_FOUND", 404);
+    return deserialize(updated);
+  }
+  remove(id) {
+    return this.repository.softDelete(id);
+  }
+}
+const productionFormulaService = new ProductionFormulaService(productionFormulasRepository);
+class ReportService {
+  exportCsv(rows) {
+    return sync.stringify(rows, { header: true });
+  }
+  async exportExcel(rows, sheetName = "Report") {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
+    if (rows.length > 0) {
+      worksheet.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
+      worksheet.addRows(rows);
+    }
+    return workbook.xlsx.writeBuffer();
+  }
+  // Formatted Daily Stock Summary workbook: title + period, grouped columns,
+  // 3-decimal numbers. `rows` are the per-item summary rows.
+  async exportDailySummaryExcel(rows = [], meta = {}) {
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet("Daily Stock Summary");
+    const headers = [
+      "Item Code",
+      "Item Name",
+      "Opening",
+      "Purchase",
+      "Sale Return",
+      "Production",
+      "Total In",
+      "Sale",
+      "Purch. Return",
+      "Issue",
+      "Total Out",
+      "Closing"
+    ];
+    const titleRow = ws.addRow(["Daily Stock Summary"]);
+    titleRow.font = { bold: true, size: 14 };
+    ws.mergeCells(titleRow.number, 1, titleRow.number, headers.length);
+    const periodRow = ws.addRow([`Period: ${meta.fromDate || ""} to ${meta.toDate || ""}`]);
+    periodRow.font = { italic: true, size: 10 };
+    ws.mergeCells(periodRow.number, 1, periodRow.number, headers.length);
+    ws.addRow([]);
+    const headerRow = ws.addRow(headers);
+    headerRow.font = { bold: true };
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1EFE9" } };
+      cell.border = { bottom: { style: "thin", color: { argb: "FF999999" } } };
+      cell.alignment = { horizontal: "center" };
+    });
+    const n = (v) => Number(v || 0);
+    for (const r of rows) {
+      const row = ws.addRow([
+        r.code || "",
+        r.item || "",
+        n(r.opening),
+        n(r.purchase),
+        n(r.sale_return),
+        n(r.production_in),
+        n(r.total_in),
+        n(r.sale),
+        n(r.purchase_return),
+        n(r.issue),
+        n(r.total_out),
+        n(r.closing)
+      ]);
+      for (let c = 3; c <= headers.length; c += 1) {
+        row.getCell(c).numFmt = "0.000";
+        row.getCell(c).alignment = { horizontal: "right" };
+      }
+    }
+    ws.getColumn(1).width = 16;
+    ws.getColumn(2).width = 26;
+    for (let c = 3; c <= headers.length; c += 1) ws.getColumn(c).width = 13;
+    return workbook.xlsx.writeBuffer();
+  }
+  exportPdf(rows, title = "Report") {
+    return new Promise((resolve) => {
+      const chunks = [];
+      const doc = new PDFDocument({ margin: 32 });
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.fontSize(18).text(title);
+      doc.moveDown();
+      rows.forEach((row) => {
+        doc.fontSize(10).text(JSON.stringify(row));
+      });
+      doc.end();
+    });
+  }
+}
+class BackupService {
+  getBackupDir() {
+    const backupDir = path.join(electron.app.getPath("userData"), "backups");
+    ensureDirectory(backupDir);
+    return backupDir;
+  }
+  createBackup() {
+    const source = getDatabasePath();
+    const backupName = `stockops-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.db`;
+    const target = path.join(this.getBackupDir(), backupName);
+    fs.copyFileSync(source, target);
+    return { path: target };
+  }
+  restoreBackup(backupPath) {
+    const target = getDatabasePath();
+    fs.copyFileSync(backupPath, target);
+    return { path: target };
+  }
+}
+class AuditLogsRepository extends BaseRepository {
+  constructor() {
+    super("auditLog");
+  }
+  async createLog(payload) {
+    const row = await this.model.create({ data: fromWire(payload) });
+    return toWire(row);
+  }
+  async recent(limit = 100) {
+    const rows = await this.model.findMany({
+      orderBy: { id: "desc" },
+      take: Number(limit)
+    });
+    return toWire(rows);
+  }
+}
+const auditLogsRepository = new AuditLogsRepository();
+class AuditService {
+  log(entry) {
+    return auditLogsRepository.createLog({
+      actor_user_id: entry.actorUserId ?? null,
+      action: entry.action,
+      entity_type: entry.entityType,
+      entity_id: entry.entityId ?? null,
+      payload_json: JSON.stringify(entry.payload ?? {}),
+      ip_address: entry.ipAddress ?? null,
+      user_agent: entry.userAgent ?? null
+    });
+  }
+  recent(limit = 100) {
+    return auditLogsRepository.recent(limit);
+  }
+}
 const authService = new AuthService();
 const importService = new ImportService();
+const printService = new PrintService();
 const inventoryService = new InventoryService();
 const reportService = new ReportService();
 const backupService = new BackupService();
@@ -2732,6 +3262,22 @@ function registerIpcHandlers() {
   electron.ipcMain.handle(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, async (_event, { limit = 10, type = null } = {}) => inventoryService.getRecentVouchers(limit, type));
   electron.ipcMain.handle(IPC_CHANNELS.STOCK_ITEM_LEDGER, async (_event, productId) => inventoryService.getItemLedger(productId));
   electron.ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_SUMMARY, async (_event, filters) => inventoryService.getDailyStockSummary(filters));
+  electron.ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_BREAKDOWN, async (_event, filters) => inventoryService.getDailyStockBreakdown(filters));
+  electron.ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_EXPORT, async (_event, { rows = [], fromDate, toDate } = {}) => {
+    const win = electron.BrowserWindow.getFocusedWindow();
+    const safe = (s) => String(s || "").replace(/[^0-9a-zA-Z-]/g, "");
+    const picked = await electron.dialog.showSaveDialog(win ?? void 0, {
+      title: "Save Daily Stock Summary",
+      defaultPath: `daily-stock-summary_${safe(fromDate)}_to_${safe(toDate)}.xlsx`,
+      filters: [{ name: "Excel Workbook", extensions: ["xlsx"] }]
+    });
+    if (picked.canceled || !picked.filePath) {
+      return { canceled: true };
+    }
+    const buffer = await reportService.exportDailySummaryExcel(rows, { fromDate, toDate });
+    await fs.promises.writeFile(picked.filePath, Buffer.from(buffer));
+    return { canceled: false, path: picked.filePath };
+  });
   electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_SAVE, async (_event, payload) => voucherService.savePurchaseVoucher(payload));
   electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_GET_NEXT_NO, async () => voucherService.getNextPurchaseVoucherNo());
   electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_SALE_RETURN_SAVE, async (_event, payload) => voucherService.saveSaleReturnVoucher(payload));
@@ -2746,6 +3292,8 @@ function registerIpcHandlers() {
   electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_RETURN_GET_NEXT_NO, async () => voucherService.getNextPurchaseReturnVoucherNo());
   electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_LIST_RECENT, async (_event, { type, limit = 20 } = {}) => voucherService.listVouchers(type, limit));
   electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_GET_DETAIL, async (_event, { type, id } = {}) => voucherService.getVoucher(type, id));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_PRINT, async (_event, { type, id } = {}) => printService.printVoucher(type, id));
+  electron.ipcMain.handle(IPC_CHANNELS.VOUCHER_UPDATE, async (_event, { type, id, payload } = {}) => voucherService.updateVoucher(type, id, payload));
   electron.ipcMain.handle(IPC_CHANNELS.IMPORT_EXCEL, async () => {
     const win = electron.BrowserWindow.getFocusedWindow();
     const picked = await electron.dialog.showOpenDialog(win ?? void 0, {

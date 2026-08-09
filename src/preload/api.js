@@ -18,6 +18,8 @@ const api = {
   getRecentVouchers: (limit = 10, type = null) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, { limit, type }),
   getItemLedger: (productId) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_ITEM_LEDGER, productId),
   getDailyStockSummary: (filters) => ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_SUMMARY, filters),
+  getDailyStockBreakdown: (filters) => ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_BREAKDOWN, filters),
+  exportDailySummary: (payload) => ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_EXPORT, payload),
   exportReport: (payload) => ipcRenderer.invoke(IPC_CHANNELS.REPORT_EXPORT, payload),
   createBackup: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_CREATE),
   restoreBackup: (backupPath) => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RESTORE, backupPath),
@@ -37,6 +39,8 @@ const api = {
   getNextPartyCode: () => ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE),
   listVouchers: (type, limit = 20) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_LIST_RECENT, { type, limit }),
   getVoucher: (type, id) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_GET_DETAIL, { type, id }),
+  updateVoucher: (type, id, payload) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_UPDATE, { type, id, payload }),
+  printVoucher: (type, id) => ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PRINT, { type, id }),
   importExcel: () => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL),
   checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK)
 };

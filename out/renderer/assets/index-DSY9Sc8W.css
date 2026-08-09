@@ -894,6 +894,12 @@ th {
   margin: 0;
 }
 
+.voucher-modal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .voucher-modal-close {
   background: transparent;
   color: var(--slate-600);

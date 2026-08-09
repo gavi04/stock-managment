@@ -167,7 +167,10 @@ export class InventoryService {
     });
   }
 
-  async getDailyStockSummary(filters = {}) {
+  // Day-by-day rows per item for the range (used by the drill-down popup). Also
+  // returns the pre-range balance per item (= closing of the day before "from")
+  // and the product-name map, which the per-item summary builds on.
+  async computeDailyRows(filters = {}) {
     const prisma = getPrismaClient();
     const { fromDate, toDate, productId, categoryId } = filters;
 
@@ -182,13 +185,14 @@ export class InventoryService {
 
     const products = await prisma.product.findMany({
       where: productWhere,
-      select: { id: true, name: true }
+      select: { id: true, name: true, code: true }
     });
     const productIds = products.map((product) => product.id);
     const productNameById = new Map(products.map((product) => [product.id, product.name]));
+    const productCodeById = new Map(products.map((product) => [product.id, product.code]));
 
     if (productIds.length === 0) {
-      return [];
+      return { dailyRows: [], preRange: new Map(), productNameById, productCodeById, openingInRange: new Map() };
     }
 
     const openingAgg = await prisma.stockTransaction.groupBy({
@@ -201,6 +205,8 @@ export class InventoryService {
     for (const row of openingAgg) {
       runningBalance.set(row.productId, Number(row._sum.quantity ?? 0));
     }
+    // Snapshot the pre-range balance (closing of the day before "from").
+    const preRange = new Map(runningBalance);
 
     const rangeTxns = await prisma.stockTransaction.findMany({
       where: {
@@ -225,10 +231,15 @@ export class InventoryService {
       select: { productId: true, quantity: true, createdAt: true }
     });
     const openingByKey = new Map();
+    // Per-item total of opening-balance stock added inside the range — the summary
+    // adds this to the OPENING figure so newly-created items show their opening
+    // stock in the Opening column (not as an inflow).
+    const openingInRange = new Map();
     for (const txn of openingTxns) {
       const date = txn.createdAt.toISOString().slice(0, 10);
       const key = `${date}::${txn.productId}`;
       openingByKey.set(key, (openingByKey.get(key) ?? 0) + Number(txn.quantity));
+      openingInRange.set(txn.productId, (openingInRange.get(txn.productId) ?? 0) + Number(txn.quantity));
     }
 
     const buckets = new Map();
@@ -317,6 +328,100 @@ export class InventoryService {
       runningBalance.set(bucket.product_id, closing);
     }
 
+    return { dailyRows: result, preRange, productNameById, productCodeById, openingInRange };
+  }
+
+  // Day-by-day breakdown for the drill-down popup (pass a productId in filters).
+  async getDailyStockBreakdown(filters = {}) {
+    const { dailyRows } = await this.computeDailyRows(filters);
+    return dailyRows;
+  }
+
+  // One summarised row per item for the range: OPENING = closing of the day
+  // before "from", the in/out totals across the range, CLOSING = balance on the
+  // "to" date. Items that have a balance but no movement in the range are shown
+  // with opening = closing.
+  async getDailyStockSummary(filters = {}) {
+    const { dailyRows, preRange, productNameById, productCodeById, openingInRange } =
+      await this.computeDailyRows(filters);
+
+    const byProduct = new Map();
+    for (const row of dailyRows) {
+      let sum = byProduct.get(row.product_id);
+      if (!sum) {
+        sum = {
+          product_id: row.product_id,
+          purchase: 0,
+          sale_return: 0,
+          production_in: 0,
+          sale: 0,
+          purchase_return: 0,
+          issue: 0,
+          total_in: 0,
+          total_out: 0,
+          closing: 0
+        };
+        byProduct.set(row.product_id, sum);
+      }
+      sum.purchase += row.purchase;
+      sum.sale_return += row.sale_return;
+      sum.production_in += row.production_in;
+      sum.sale += row.sale;
+      sum.purchase_return += row.purchase_return;
+      sum.issue += row.issue;
+      sum.total_in += row.total_in;
+      sum.total_out += row.total_out;
+      sum.closing = row.closing; // rows are date-ascending, so last one wins
+    }
+
+    const result = [];
+    for (const [productId, name] of productNameById) {
+      // Opening = balance before the range PLUS any opening stock entered inside
+      // the range (a newly-created item shows its opening qty in the Opening
+      // column rather than as an inflow).
+      const opening = (preRange.get(productId) ?? 0) + (openingInRange.get(productId) ?? 0);
+      const sum = byProduct.get(productId);
+      const code = productCodeById.get(productId) ?? '';
+
+      if (!sum) {
+        // No movement in the range — only show it if it carries a balance.
+        if (Math.abs(opening) < 1e-9) continue;
+        result.push({
+          product_id: productId,
+          item: name,
+          code,
+          opening,
+          purchase: 0,
+          sale_return: 0,
+          production_in: 0,
+          total_in: 0,
+          sale: 0,
+          purchase_return: 0,
+          issue: 0,
+          total_out: 0,
+          closing: opening
+        });
+        continue;
+      }
+
+      result.push({
+        product_id: productId,
+        item: name,
+        code,
+        opening,
+        purchase: sum.purchase,
+        sale_return: sum.sale_return,
+        production_in: sum.production_in,
+        total_in: sum.total_in,
+        sale: sum.sale,
+        purchase_return: sum.purchase_return,
+        issue: sum.issue,
+        total_out: sum.total_out,
+        closing: sum.closing
+      });
+    }
+
+    result.sort((a, b) => String(a.code).localeCompare(String(b.code)));
     return result;
   }
 }

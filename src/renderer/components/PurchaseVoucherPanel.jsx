@@ -5,6 +5,7 @@ import { todayDdmmyyyy } from '../utils/dateFormat.js';
 import { handleFormKeyNav } from '../utils/formKeyNav.js';
 import { VoucherHistory } from './VoucherHistory.jsx';
 import { useFocusFirstField } from '../utils/useFocusFirstField.js';
+import { detailItemToRow } from '../utils/voucherRow.js';
 
 function createEmptyRow() {
   return {
@@ -50,7 +51,7 @@ function recalcRow(row, changedField) {
   return next;
 }
 
-export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
+export function PurchaseVoucherPanel({ products, parties, busy, onSave, onUpdate }) {
   const [voucherNo, setVoucherNo] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(todayDdmmyyyy());
   const [customerId, setCustomerId] = useState('');
@@ -65,6 +66,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   const [items, setItems] = useState([createEmptyRow()]);
   const [error, setError] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [editingId, setEditingId] = useState(null);
 
   const gridRef = useRef(null);
   const rootRef = useFocusFirstField();
@@ -136,6 +138,7 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
   );
 
   const resetForm = async () => {
+    setEditingId(null);
     setInvoiceNo('');
     setBatchNo('');
     setExpiryDate('');
@@ -144,12 +147,32 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
     setBrokerId('');
     setRemarks('');
     setCustomerId('');
+    setPurchaseDate(todayDdmmyyyy());
     setItems([createEmptyRow()]);
     const nextNo = await window.stockOps.getNextPurchaseVoucherNo();
     setVoucherNo(nextNo);
   };
 
-  const handleSave = async () => {
+  const loadForEdit = (d) => {
+    setEditingId(d.id);
+    setVoucherNo(d.voucher_no || '');
+    setPurchaseDate(d.date || todayDdmmyyyy());
+    setCustomerId(d.party_id != null ? String(d.party_id) : '');
+    setInvoiceNo(d.invoice_no || '');
+    setBatchNo(d.batch_no || '');
+    setExpiryDate(d.expiry_date || '');
+    setVehicleNo(d.vehicle_no || '');
+    setBiltyNo(d.bilty_no || '');
+    // Broker is stored by name; match it back to a party for the picker.
+    const brokerParty = d.broker ? parties.find((p) => p.name === d.broker) : null;
+    setBrokerId(brokerParty ? String(brokerParty.id) : '');
+    setRemarks(d.remarks || '');
+    setItems(d.items?.length ? d.items.map(detailItemToRow) : [createEmptyRow()]);
+    setError(null);
+    window.scrollTo?.({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSave = async (shouldPrint = false) => {
     setError(null);
     try {
       const validItems = items.filter(
@@ -191,9 +214,17 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
         }))
       };
 
-      await onSave(payload);
+      const saved = editingId ? await onUpdate(editingId, payload) : await onSave(payload);
+      if (!saved && editingId) return;
       await resetForm();
       setHistoryKey((k) => k + 1);
+      if (shouldPrint && saved?.id) {
+        try {
+          await window.stockOps.printVoucher('purchase', saved.id);
+        } catch {
+          /* printing is best-effort; the voucher is already saved */
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to save voucher');
     }
@@ -206,9 +237,16 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
     <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* HEADER SECTION */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <h2>Purchase Voucher</h2>
-          {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
+          <h2>{editingId ? `Editing Purchase Voucher ${voucherNo}` : 'Purchase Voucher'}</h2>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
+            {editingId && (
+              <button type="button" className="ghost-light-btn" onClick={resetForm} disabled={busy}>
+                Cancel Edit
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '16px', marginBottom: '16px' }}>
@@ -436,13 +474,16 @@ export function PurchaseVoucherPanel({ products, parties, busy, onSave }) {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', borderTop: '1px solid #e5e1d8', paddingTop: '16px' }}>
-          <button type="button" onClick={handleSave} disabled={busy} style={{ minWidth: '120px' }}>
-            {busy ? 'Saving...' : 'Save Voucher'}
+          <button type="button" className="ghost-light-btn" onClick={() => handleSave(true)} disabled={busy} style={{ minWidth: '120px' }}>
+            {busy ? 'Working…' : editingId ? 'Update & Print' : 'Save & Print'}
+          </button>
+          <button type="button" onClick={() => handleSave(false)} disabled={busy} style={{ minWidth: '120px' }}>
+            {busy ? 'Saving...' : editingId ? 'Update Voucher' : 'Save Voucher'}
           </button>
         </div>
       </section>
 
-      <VoucherHistory type="purchase" refreshToken={historyKey} title="Recent Purchase Vouchers" partyLabel="Supplier" />
+      <VoucherHistory type="purchase" refreshToken={historyKey} title="Recent Purchase Vouchers" partyLabel="Supplier" onEdit={loadForEdit} />
     </div>
   );
 }

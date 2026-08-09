@@ -173,10 +173,12 @@ export function ProductionVoucherPanel({ products, formulas = [], busy, onSave }
             <span>Voucher No.</span>
             <input value={voucherNo} readOnly style={{ background: '#f2f0ea' }} />
           </label>
+          {/* Recurring option hidden for now — kept for future use.
           <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', marginTop: '24px' }}>
             <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} style={{ width: 'auto' }} />
             <span>Make it Recurring</span>
           </label>
+          */}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
@@ -207,11 +209,13 @@ export function ProductionVoucherPanel({ products, formulas = [], busy, onSave }
 
       {/* SINGLE GRID: issued + produced per row */}
       <section className="panel" style={{ flex: 1, padding: '0', display: 'flex', flexDirection: 'column' }}>
+        {/* Add-row button hidden for now — Enter still adds a row.
         <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px 0' }}>
           <button type="button" className="ghost-light-btn" onClick={appendRow} style={{ padding: '4px 10px' }}>
             + Row
           </button>
         </div>
+        */}
         <div style={{ overflow: 'auto', flex: 1 }}>
           <table ref={gridRef} className="voucher-grid" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#f8f8f6', zIndex: 1 }}>

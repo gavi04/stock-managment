@@ -4,7 +4,9 @@ const money = (v) => `₹ ${Number(v || 0).toFixed(2)}`;
 const num = (v) => Number(v || 0).toFixed(3);
 
 // Modal showing a single voucher's header + line items.
-function VoucherDetailModal({ type, detail, loading, error, onClose }) {
+function VoucherDetailModal({ type, detail, loading, error, onClose, onEdit }) {
+  const [printing, setPrinting] = useState(false);
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -15,14 +17,36 @@ function VoucherDetailModal({ type, detail, loading, error, onClose }) {
 
   const isProduction = type === 'production';
 
+  const print = async () => {
+    if (!detail) return;
+    setPrinting(true);
+    try {
+      await window.stockOps.printVoucher(type, detail.id);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   return (
     <div className="voucher-modal-overlay" onMouseDown={onClose}>
       <div className="voucher-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="voucher-modal-head">
           <h3>{detail ? `Voucher ${detail.voucher_no}` : 'Voucher'}</h3>
-          <button type="button" className="voucher-modal-close" onClick={onClose} aria-label="Close">
-            ×
-          </button>
+          <div className="voucher-modal-head-actions">
+            {detail && onEdit ? (
+              <button type="button" className="ghost-light-btn" onClick={() => onEdit(detail)}>
+                Edit
+              </button>
+            ) : null}
+            {detail ? (
+              <button type="button" className="ghost-light-btn" onClick={print} disabled={printing}>
+                {printing ? 'Printing…' : 'Print'}
+              </button>
+            ) : null}
+            <button type="button" className="voucher-modal-close" onClick={onClose} aria-label="Close">
+              ×
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -181,7 +205,8 @@ export function VoucherHistory({
   partyLabel = 'Party',
   showParty = true,
   showAmount = true,
-  limit = 20
+  limit = 20,
+  onEdit
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -301,6 +326,14 @@ export function VoucherHistory({
           loading={detailLoading}
           error={detailError}
           onClose={closeVoucher}
+          onEdit={
+            onEdit
+              ? (d) => {
+                  closeVoucher();
+                  onEdit(d);
+                }
+              : undefined
+          }
         />
       ) : null}
     </section>

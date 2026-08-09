@@ -171,8 +171,31 @@ function atEnd(el) {
 
 export function handleFormKeyNav(e) {
   const el = e.target;
-  if (!el || !['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return;
+  if (!el || !['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) return;
   const container = e.currentTarget;
+
+  if (el.tagName === 'BUTTON') {
+    // On a Save/Cancel button, arrows move back to the fields; Enter/Space still
+    // activate the button (native).
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      const n = prevField(el, container);
+      if (n) {
+        e.preventDefault();
+        place(n, 'end');
+      } else if (focusAdjacent(el, -1, 'end')) {
+        e.preventDefault();
+      }
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      const n = nextField(el, container);
+      if (n) {
+        e.preventDefault();
+        place(n, 'start');
+      } else if (focusAdjacent(el, 1, 'start')) {
+        e.preventDefault();
+      }
+    }
+    return;
+  }
 
   if (el.tagName === 'TEXTAREA') {
     // Enter moves on like every other field so the flow reaches the Save button;

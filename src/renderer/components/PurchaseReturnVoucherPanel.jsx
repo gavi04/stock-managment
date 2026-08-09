@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { SearchableSelect } from './SearchableSelect.jsx';
 import { handleGridKeyNav } from '../utils/gridKeyNav.js';
 import { todayDdmmyyyy } from '../utils/dateFormat.js';
 import { handleFormKeyNav } from '../utils/formKeyNav.js';
-import { emptyVoucherRow, recalcVoucherRow, applyProductToRow, rowHasQty, toItemPayload } from '../utils/voucherRow.js';
+import { emptyVoucherRow, recalcVoucherRow, applyProductToRow, rowHasQty, toItemPayload, detailItemToRow } from '../utils/voucherRow.js';
 import { VoucherHistory } from './VoucherHistory.jsx';
 import { useFocusFirstField } from '../utils/useFocusFirstField.js';
 
 const createEmptyRow = emptyVoucherRow;
 
-export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) {
+export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave, onUpdate }) {
   const [voucherNo, setVoucherNo] = useState('');
   const [returnDate, setReturnDate] = useState(todayDdmmyyyy());
   const [supplierId, setSupplierId] = useState('');
@@ -17,15 +18,21 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
   const [expiryDate, setExpiryDate] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [biltyNo, setBiltyNo] = useState('');
-  const [broker, setBroker] = useState('');
+  const [brokerId, setBrokerId] = useState('');
   const [remarks, setRemarks] = useState('');
 
   const [items, setItems] = useState([createEmptyRow()]);
   const [error, setError] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [editingId, setEditingId] = useState(null);
   const rootRef = useFocusFirstField();
 
   const gridRef = useRef(null);
+
+  const partyOptions = useMemo(
+    () => parties.map((p) => ({ value: p.id, label: p.name, hint: p.gstin ? `| GST: ${p.gstin}` : p.code })),
+    [parties]
+  );
 
   useEffect(() => {
     window.stockOps.getNextPurchaseReturnVoucherNo().then(setVoucherNo).catch(console.error);
@@ -68,12 +75,43 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
     return acc;
   }, { taxable: 0, gst: 0, grand: 0 });
 
-  const handleSave = async () => {
+  const loadForEdit = (d) => {
+    setEditingId(d.id);
+    setVoucherNo(d.voucher_no || '');
+    setReturnDate(d.date || todayDdmmyyyy());
+    setSupplierId(d.party_id != null ? String(d.party_id) : '');
+    setInvoiceNo(d.invoice_no || '');
+    setBatchNo(d.batch_no || '');
+    setExpiryDate(d.expiry_date || '');
+    setVehicleNo(d.vehicle_no || '');
+    setBiltyNo(d.bilty_no || '');
+    const brokerParty = d.broker ? parties.find((p) => p.name === d.broker) : null;
+    setBrokerId(brokerParty ? String(brokerParty.id) : '');
+    setRemarks(d.remarks || '');
+    setItems(d.items?.length ? d.items.map(detailItemToRow) : [createEmptyRow()]);
+    setError(null);
+    window.scrollTo?.({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = async () => {
+    setEditingId(null);
+    setInvoiceNo(''); setBatchNo(''); setExpiryDate('');
+    setVehicleNo(''); setBiltyNo(''); setBrokerId(''); setRemarks('');
+    setSupplierId('');
+    setItems([createEmptyRow()]);
+    setReturnDate(todayDdmmyyyy());
+    const nextNo = await window.stockOps.getNextPurchaseReturnVoucherNo();
+    setVoucherNo(nextNo);
+  };
+
+  const handleSave = async (shouldPrint = false) => {
     setError(null);
     try {
       const validItems = items.filter(rowHasQty);
       if (validItems.length === 0) throw new Error('Add at least one item with a pcs or quantity.');
       if (!supplierId) throw new Error('Supplier is required.');
+
+      const brokerName = parties.find((p) => String(p.id) === String(brokerId))?.name || '';
 
       const payload = {
         voucher_no: voucherNo,
@@ -85,7 +123,7 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
         expiry_date: expiryDate,
         vehicle_no: vehicleNo,
         bilty_no: biltyNo,
-        broker,
+        broker: brokerName,
         remarks,
         taxable_value: totals.taxable,
         gst_amount: totals.gst,
@@ -93,14 +131,23 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
         items: validItems.map(toItemPayload)
       };
 
-      await onSave(payload);
+      const saved = editingId ? await onUpdate(editingId, payload) : await onSave(payload);
+      if (!saved && editingId) return;
 
+      setEditingId(null);
       setInvoiceNo(''); setBatchNo(''); setExpiryDate('');
-      setVehicleNo(''); setBiltyNo(''); setBroker(''); setRemarks('');
+      setVehicleNo(''); setBiltyNo(''); setBrokerId(''); setRemarks('');
       setItems([createEmptyRow()]);
       const nextNo = await window.stockOps.getNextPurchaseReturnVoucherNo();
       setVoucherNo(nextNo);
       setHistoryKey((k) => k + 1);
+      if (shouldPrint && saved?.id) {
+        try {
+          await window.stockOps.printVoucher('purchase_return', saved.id);
+        } catch {
+          /* printing is best-effort; the voucher is already saved */
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to save voucher');
     }
@@ -113,9 +160,16 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
     <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {/* HEADER */}
       <section className="panel" style={{ padding: '16px' }} onKeyDown={handleFormKeyNav}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <h2>Purchase Return Voucher</h2>
-          {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
+          <h2>{editingId ? `Editing Purchase Return ${voucherNo}` : 'Purchase Return Voucher'}</h2>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {error && <span style={{ color: 'red', fontWeight: 'bold' }}>{error}</span>}
+            {editingId && (
+              <button type="button" className="ghost-light-btn" onClick={cancelEdit} disabled={busy}>
+                Cancel Edit
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '16px', marginBottom: '16px' }}>
@@ -221,7 +275,7 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <label className="field">
               <span>Broker</span>
-              <input value={broker} onChange={e => setBroker(e.target.value)} />
+              <SearchableSelect options={partyOptions} value={brokerId} onChange={setBrokerId} placeholder="Search broker…" />
             </label>
             <label className="field">
               <span>Remarks</span>
@@ -244,13 +298,16 @@ export function PurchaseReturnVoucherPanel({ products, parties, busy, onSave }) 
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', borderTop: '1px solid #e8e8e8', paddingTop: '16px' }}>
-          <button type="button" onClick={handleSave} disabled={busy} style={{ minWidth: '120px' }}>
-            {busy ? 'Saving...' : 'Save (F2)'}
+          <button type="button" className="ghost-light-btn" onClick={() => handleSave(true)} disabled={busy} style={{ minWidth: '120px' }}>
+            {busy ? 'Working…' : editingId ? 'Update & Print' : 'Save & Print'}
+          </button>
+          <button type="button" onClick={() => handleSave(false)} disabled={busy} style={{ minWidth: '120px' }}>
+            {busy ? 'Saving...' : editingId ? 'Update Voucher' : 'Save (F2)'}
           </button>
         </div>
       </section>
 
-      <VoucherHistory type="purchase_return" refreshToken={historyKey} title="Recent Purchase Return Vouchers" partyLabel="Supplier" />
+      <VoucherHistory type="purchase_return" refreshToken={historyKey} title="Recent Purchase Return Vouchers" partyLabel="Supplier" onEdit={loadForEdit} />
     </div>
   );
 }

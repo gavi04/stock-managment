@@ -276,16 +276,16 @@ export function StockMasterPanel({ products, categories, units, onCreate, onUpda
               Opening Stock Date
               <input type="text" placeholder="dd/mm/yyyy" {...register('opening_date')} />
             </label>
-            <label style={{ gridColumn: 'span 2' }}>
-              General Description
-              <input {...register('description')} />
-            </label>
             <label>
               ISI Marked
               <select {...register('isi_mark')}>
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </select>
+            </label>
+            <label>
+              General Description
+              <input {...register('description')} />
             </label>
             <label style={{ gridColumn: 'span 2' }}>
               Item Code

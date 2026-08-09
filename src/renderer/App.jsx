@@ -260,14 +260,32 @@ export default function App() {
     }
   };
 
+  // Edit a saved voucher: replaces its lines + stock movements, keeps its number.
+  const updateVoucherOfType = async (type, id, payload, label) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await window.stockOps.updateVoucher(type, id, payload);
+      await Promise.all([refreshDashboard(), refreshMasters()]);
+      return saved;
+    } catch (voucherError) {
+      setError(voucherError.message || `Unable to update ${label}`);
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const postPurchaseVoucher = async (payload) => {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.savePurchaseVoucher(payload);
+      const saved = await window.stockOps.savePurchaseVoucher(payload);
       await Promise.all([refreshDashboard(), refreshMasters()]);
+      return saved; // { id, voucher_no } — used by "Save & Print"
     } catch (voucherError) {
       setError(voucherError.message || 'Unable to save purchase voucher');
+      return undefined;
     } finally {
       setBusy(false);
     }
@@ -277,10 +295,12 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.saveSaleReturnVoucher(payload);
+      const saved = await window.stockOps.saveSaleReturnVoucher(payload);
       await Promise.all([refreshDashboard(), refreshMasters()]);
+      return saved;
     } catch (voucherError) {
       setError(voucherError.message || 'Unable to save sale return voucher');
+      return undefined;
     } finally {
       setBusy(false);
     }
@@ -303,10 +323,12 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.saveSaleVoucher(payload);
+      const saved = await window.stockOps.saveSaleVoucher(payload);
       await Promise.all([refreshDashboard(), refreshMasters()]);
+      return saved;
     } catch (voucherError) {
       setError(voucherError.message || 'Unable to save sale voucher');
+      return undefined;
     } finally {
       setBusy(false);
     }
@@ -316,10 +338,12 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      await window.stockOps.savePurchaseReturnVoucher(payload);
+      const saved = await window.stockOps.savePurchaseReturnVoucher(payload);
       await Promise.all([refreshDashboard(), refreshMasters()]);
+      return saved;
     } catch (voucherError) {
       setError(voucherError.message || 'Unable to save purchase return voucher');
+      return undefined;
     } finally {
       setBusy(false);
     }
@@ -375,6 +399,7 @@ export default function App() {
           parties={parties}
           busy={busy}
           onSave={postPurchaseVoucher}
+          onUpdate={(id, payload) => updateVoucherOfType('purchase', id, payload, 'purchase voucher')}
         />
       );
     }
@@ -386,6 +411,7 @@ export default function App() {
           parties={parties}
           busy={busy}
           onSave={postSaleVoucher}
+          onUpdate={(id, payload) => updateVoucherOfType('sale', id, payload, 'sale voucher')}
         />
       );
     }
@@ -397,6 +423,7 @@ export default function App() {
           parties={parties}
           busy={busy}
           onSave={postSaleReturnVoucher}
+          onUpdate={(id, payload) => updateVoucherOfType('sale_return', id, payload, 'sale return voucher')}
         />
       );
     }
@@ -408,6 +435,7 @@ export default function App() {
           parties={parties}
           busy={busy}
           onSave={postPurchaseReturnVoucher}
+          onUpdate={(id, payload) => updateVoucherOfType('purchase_return', id, payload, 'purchase return voucher')}
         />
       );
     }

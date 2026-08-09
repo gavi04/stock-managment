@@ -9,6 +9,15 @@ export function HsnSelect({ value, onChange, inputStyle }) {
   const [results, setResults] = useState([]);
   const [active, setActive] = useState(0);
   const wrapRef = useRef(null);
+  const listRef = useRef(null);
+
+  // Keep the highlighted row scrolled into view as Up/Down move through it.
+  useEffect(() => {
+    const el = listRef.current?.children?.[active];
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [active]);
 
   useEffect(() => {
     const onDocMouseDown = (e) => {
@@ -91,11 +100,18 @@ export function HsnSelect({ value, onChange, inputStyle }) {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onBlur={() => {
+          // Close when focus leaves (keyboard nav / tab). Option picks use
+          // onMouseDown, which fires before blur, so selection still works.
+          setOpen(false);
+          setQuery('');
+        }}
         onKeyDown={onKeyDown}
         style={inputStyle}
       />
       {open ? (
         <ul
+          ref={listRef}
           style={{
             position: 'absolute',
             zIndex: 30,

@@ -19,6 +19,8 @@ export const IPC_CHANNELS = {
   AUDIT_RECENT: 'stockops:audit-recent',
   STOCK_ITEM_LEDGER: 'stockops:stock-item-ledger',
   REPORT_DAILY_SUMMARY: 'stockops:report-daily-summary',
+  REPORT_DAILY_BREAKDOWN: 'stockops:report-daily-breakdown',
+  REPORT_DAILY_EXPORT: 'stockops:report-daily-export',
   VOUCHER_PURCHASE_SAVE: 'stockops:voucher-purchase-save',
   VOUCHER_PURCHASE_GET_NEXT_NO: 'stockops:voucher-purchase-get-next-no',
   PARTY_GET_NEXT_CODE: 'stockops:party-get-next-code',
@@ -34,6 +36,8 @@ export const IPC_CHANNELS = {
   VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: 'stockops:voucher-purchase-return-get-next-no',
   VOUCHER_LIST_RECENT: 'stockops:voucher-list-recent',
   VOUCHER_GET_DETAIL: 'stockops:voucher-get-detail',
+  VOUCHER_UPDATE: 'stockops:voucher-update',
   IMPORT_EXCEL: 'stockops:import-excel',
-  UPDATE_CHECK: 'stockops:update-check'
+  UPDATE_CHECK: 'stockops:update-check',
+  VOUCHER_PRINT: 'stockops:voucher-print'
 };

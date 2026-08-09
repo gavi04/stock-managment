@@ -21,6 +21,8 @@ const IPC_CHANNELS = {
   AUDIT_RECENT: "stockops:audit-recent",
   STOCK_ITEM_LEDGER: "stockops:stock-item-ledger",
   REPORT_DAILY_SUMMARY: "stockops:report-daily-summary",
+  REPORT_DAILY_BREAKDOWN: "stockops:report-daily-breakdown",
+  REPORT_DAILY_EXPORT: "stockops:report-daily-export",
   VOUCHER_PURCHASE_SAVE: "stockops:voucher-purchase-save",
   VOUCHER_PURCHASE_GET_NEXT_NO: "stockops:voucher-purchase-get-next-no",
   PARTY_GET_NEXT_CODE: "stockops:party-get-next-code",
@@ -36,8 +38,10 @@ const IPC_CHANNELS = {
   VOUCHER_PURCHASE_RETURN_GET_NEXT_NO: "stockops:voucher-purchase-return-get-next-no",
   VOUCHER_LIST_RECENT: "stockops:voucher-list-recent",
   VOUCHER_GET_DETAIL: "stockops:voucher-get-detail",
+  VOUCHER_UPDATE: "stockops:voucher-update",
   IMPORT_EXCEL: "stockops:import-excel",
-  UPDATE_CHECK: "stockops:update-check"
+  UPDATE_CHECK: "stockops:update-check",
+  VOUCHER_PRINT: "stockops:voucher-print"
 };
 const api = {
   getAppInfo: () => electron.ipcRenderer.invoke(IPC_CHANNELS.APP_INFO),
@@ -56,6 +60,8 @@ const api = {
   getRecentVouchers: (limit = 10, type = null) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, { limit, type }),
   getItemLedger: (productId) => electron.ipcRenderer.invoke(IPC_CHANNELS.STOCK_ITEM_LEDGER, productId),
   getDailyStockSummary: (filters) => electron.ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_SUMMARY, filters),
+  getDailyStockBreakdown: (filters) => electron.ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_BREAKDOWN, filters),
+  exportDailySummary: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.REPORT_DAILY_EXPORT, payload),
   exportReport: (payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.REPORT_EXPORT, payload),
   createBackup: () => electron.ipcRenderer.invoke(IPC_CHANNELS.BACKUP_CREATE),
   restoreBackup: (backupPath) => electron.ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RESTORE, backupPath),
@@ -75,6 +81,8 @@ const api = {
   getNextPartyCode: () => electron.ipcRenderer.invoke(IPC_CHANNELS.PARTY_GET_NEXT_CODE),
   listVouchers: (type, limit = 20) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_LIST_RECENT, { type, limit }),
   getVoucher: (type, id) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_GET_DETAIL, { type, id }),
+  updateVoucher: (type, id, payload) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_UPDATE, { type, id, payload }),
+  printVoucher: (type, id) => electron.ipcRenderer.invoke(IPC_CHANNELS.VOUCHER_PRINT, { type, id }),
   importExcel: () => electron.ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXCEL),
   checkForUpdates: () => electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK)
 };

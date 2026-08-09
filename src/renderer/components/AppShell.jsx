@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+const FIRST_FIELD_SELECTOR =
+  'input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])';
 
 const ICONS = {
   dashboard: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
@@ -28,10 +31,34 @@ const STORAGE_KEY = 'stockops.sidebarCollapsed';
 
 export function AppShell({ navigation, activeKey, onNavigate, headerTitle, children, onLogout, user }) {
   const [version, setVersion] = useState('');
+  const contentRef = useRef(null);
 
   useEffect(() => {
     window.stockOps?.getAppInfo?.().then((info) => setVersion(info?.version || '')).catch(() => undefined);
   }, []);
+
+  // On every page change, move the cursor to the first editable field so keyboard
+  // entry can start immediately. Runs after the new page has mounted.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const root = contentRef.current;
+      if (!root) return;
+      const first = [...root.querySelectorAll(FIRST_FIELD_SELECTOR)].find(
+        (el) => el.offsetParent !== null && el.tabIndex !== -1
+      );
+      if (first) {
+        first.focus();
+        if (typeof first.select === 'function') {
+          try {
+            first.select();
+          } catch {
+            /* date / number inputs */
+          }
+        }
+      }
+    }, 80);
+    return () => clearTimeout(id);
+  }, [activeKey]);
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -123,7 +150,7 @@ export function AppShell({ navigation, activeKey, onNavigate, headerTitle, child
         </div>
       </aside>
 
-      <main className="content-area">
+      <main className="content-area" ref={contentRef}>
         <header className="content-header">
           <h1>{headerTitle}</h1>
           <p>Overview as of {new Date().toLocaleDateString()}</p>

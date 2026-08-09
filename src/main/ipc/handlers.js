@@ -1,7 +1,9 @@
+import fs from 'node:fs';
 import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { AuthService } from '../services/authService.js';
 import { ImportService } from '../services/importService.js';
+import { PrintService } from '../services/printService.js';
 import { checkForUpdates } from '../updater.js';
 import { categoryService, hsnService, partyService, productService, unitService, warehouseService } from '../services/lookupServices.js';
 import { productionFormulaService } from '../services/productionFormulaService.js';
@@ -13,6 +15,7 @@ import { VoucherService } from '../services/voucherService.js';
 
 const authService = new AuthService();
 const importService = new ImportService();
+const printService = new PrintService();
 const inventoryService = new InventoryService();
 const reportService = new ReportService();
 const backupService = new BackupService();
@@ -67,6 +70,25 @@ export function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.STOCK_RECENT_VOUCHERS, async (_event, { limit = 10, type = null } = {}) => inventoryService.getRecentVouchers(limit, type));
   ipcMain.handle(IPC_CHANNELS.STOCK_ITEM_LEDGER, async (_event, productId) => inventoryService.getItemLedger(productId));
   ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_SUMMARY, async (_event, filters) => inventoryService.getDailyStockSummary(filters));
+  ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_BREAKDOWN, async (_event, filters) => inventoryService.getDailyStockBreakdown(filters));
+
+  ipcMain.handle(IPC_CHANNELS.REPORT_DAILY_EXPORT, async (_event, { rows = [], fromDate, toDate } = {}) => {
+    const win = BrowserWindow.getFocusedWindow();
+    const safe = (s) => String(s || '').replace(/[^0-9a-zA-Z-]/g, '');
+    const picked = await dialog.showSaveDialog(win ?? undefined, {
+      title: 'Save Daily Stock Summary',
+      defaultPath: `daily-stock-summary_${safe(fromDate)}_to_${safe(toDate)}.xlsx`,
+      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
+    });
+
+    if (picked.canceled || !picked.filePath) {
+      return { canceled: true };
+    }
+
+    const buffer = await reportService.exportDailySummaryExcel(rows, { fromDate, toDate });
+    await fs.promises.writeFile(picked.filePath, Buffer.from(buffer));
+    return { canceled: false, path: picked.filePath };
+  });
 
   ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_SAVE, async (_event, payload) => voucherService.savePurchaseVoucher(payload));
   ipcMain.handle(IPC_CHANNELS.VOUCHER_PURCHASE_GET_NEXT_NO, async () => voucherService.getNextPurchaseVoucherNo());
@@ -88,6 +110,8 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(IPC_CHANNELS.VOUCHER_LIST_RECENT, async (_event, { type, limit = 20 } = {}) => voucherService.listVouchers(type, limit));
   ipcMain.handle(IPC_CHANNELS.VOUCHER_GET_DETAIL, async (_event, { type, id } = {}) => voucherService.getVoucher(type, id));
+  ipcMain.handle(IPC_CHANNELS.VOUCHER_PRINT, async (_event, { type, id } = {}) => printService.printVoucher(type, id));
+  ipcMain.handle(IPC_CHANNELS.VOUCHER_UPDATE, async (_event, { type, id, payload } = {}) => voucherService.updateVoucher(type, id, payload));
 
   ipcMain.handle(IPC_CHANNELS.IMPORT_EXCEL, async () => {
     const win = BrowserWindow.getFocusedWindow();

@@ -60,6 +60,27 @@ export function applyProductToRow(row, product, baseRateField = 'purchase_rate')
   return next;
 }
 
+// Maps a saved voucher's line item (from getVoucher) back into an editable grid
+// row, so a voucher can be loaded into the entry form for editing.
+export function detailItemToRow(it) {
+  return {
+    id: Date.now() + Math.random(),
+    product_id: it.product_id != null ? String(it.product_id) : '',
+    product_name: it.product_name || '',
+    hsn: it.hsn || '',
+    unit_basis: it.unit_basis === 'pcs' ? 'pcs' : 'quantity',
+    pcs: Number(it.pcs) ? String(it.pcs) : '',
+    quantity: Number(it.quantity) ? String(it.quantity) : '',
+    base_rate: it.base_rate != null ? String(it.base_rate) : '',
+    size_diff: it.size_diff != null ? String(it.size_diff) : '0',
+    net_rate: it.net_rate != null ? String(it.net_rate) : '',
+    taxable_value: it.taxable_value != null ? String(it.taxable_value) : '',
+    gst_rate: it.gst_rate != null ? String(it.gst_rate) : '0',
+    gst_amount: it.gst_amount != null ? String(it.gst_amount) : '',
+    amount: it.amount != null ? String(it.amount) : ''
+  };
+}
+
 // A row is postable if it has a product and a positive value in its basis column.
 export function rowHasQty(row) {
   return Boolean(row.product_id) && (Number(row.quantity) > 0 || Number(row.pcs) > 0);

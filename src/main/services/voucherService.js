@@ -2,15 +2,30 @@ import { getPrismaClient } from '../db/database.js';
 import { AppError } from '../utils/errors.js';
 import { z } from 'zod';
 
-// Shared config for the voucher header models: which Prisma model, which date
-// field, and the party relation (supplier/customer). Used by both the history
-// list and the single-voucher detail lookup.
+// Shared config for the voucher header models: which Prisma model, date field,
+// party relation, party FK, item model/FK, and the save method to reuse when
+// re-creating on edit. Used by the history list, detail lookup, and update.
 const VOUCHER_MODELS = {
-  purchase: { model: 'purchase', dateField: 'purchaseDate', partyRel: 'supplier', kind: 'trade' },
-  sale: { model: 'sale', dateField: 'saleDate', partyRel: 'customer', kind: 'trade' },
-  sale_return: { model: 'saleReturn', dateField: 'returnDate', partyRel: 'customer', kind: 'trade' },
-  purchase_return: { model: 'purchaseReturn', dateField: 'returnDate', partyRel: 'supplier', kind: 'trade' },
-  production: { model: 'production', dateField: 'productionDate', partyRel: null, kind: 'production' }
+  purchase: {
+    model: 'purchase', dateField: 'purchaseDate', partyRel: 'supplier', partyIdField: 'supplierId',
+    kind: 'trade', itemModel: 'purchaseItem', itemFk: 'purchaseId', saveMethod: 'savePurchaseVoucher'
+  },
+  sale: {
+    model: 'sale', dateField: 'saleDate', partyRel: 'customer', partyIdField: 'customerId',
+    kind: 'trade', itemModel: 'saleItem', itemFk: 'saleId', saveMethod: 'saveSaleVoucher'
+  },
+  sale_return: {
+    model: 'saleReturn', dateField: 'returnDate', partyRel: 'customer', partyIdField: 'customerId',
+    kind: 'trade', itemModel: 'saleReturnItem', itemFk: 'saleReturnId', saveMethod: 'saveSaleReturnVoucher'
+  },
+  purchase_return: {
+    model: 'purchaseReturn', dateField: 'returnDate', partyRel: 'supplier', partyIdField: 'supplierId',
+    kind: 'trade', itemModel: 'purchaseReturnItem', itemFk: 'purchaseReturnId', saveMethod: 'savePurchaseReturnVoucher'
+  },
+  production: {
+    model: 'production', dateField: 'productionDate', partyRel: null, partyIdField: null,
+    kind: 'production', itemModel: 'productionItem', itemFk: 'productionId', saveMethod: 'saveProductionVoucher'
+  }
 };
 
 const purchaseItemSchema = z
@@ -488,7 +503,9 @@ export class VoucherService {
       throw new Error(`Unknown voucher type: ${type}`);
     }
 
-    const include = { items: { include: { product: { select: { name: true, code: true } } } } };
+    const include = {
+      items: { include: { product: { select: { name: true, code: true, unitBasis: true } } } }
+    };
     if (config.partyRel) {
       include[config.partyRel] = { select: { name: true } };
     }
@@ -508,6 +525,7 @@ export class VoucherService {
       voucher_no: row.voucherNo,
       date: row[config.dateField],
       party: config.partyRel ? row[config.partyRel]?.name ?? '' : '',
+      party_id: config.partyIdField ? row[config.partyIdField] ?? null : null,
       remarks: row.remarks ?? ''
     };
 
@@ -516,6 +534,7 @@ export class VoucherService {
         ...base,
         is_recurring: row.isRecurring,
         items: row.items.map((item) => ({
+          product_id: item.productId,
           product_name: item.product?.name ?? '',
           product_code: item.product?.code ?? '',
           batch_no: item.batchNo ?? '',
@@ -531,6 +550,7 @@ export class VoucherService {
       ...base,
       invoice_no: row.invoiceNo ?? '',
       batch_no: row.batchNo ?? '',
+      expiry_date: row.expiryDate ?? '',
       vehicle_no: row.vehicleNo ?? '',
       bilty_no: row.biltyNo ?? '',
       broker: row.broker ?? '',
@@ -538,12 +558,15 @@ export class VoucherService {
       gst_amount: row.gstAmount ?? 0,
       total_amount: row.totalAmount ?? 0,
       items: row.items.map((item) => ({
+        product_id: item.productId,
         product_name: item.product?.name ?? item.productName ?? '',
         product_code: item.product?.code ?? '',
+        unit_basis: item.product?.unitBasis === 'pcs' ? 'pcs' : 'quantity',
         hsn: item.hsn ?? '',
         pcs: item.pcs ?? 0,
         quantity: item.quantity ?? 0,
         base_rate: item.baseRate ?? 0,
+        size_diff: item.sizeDiff ?? 0,
         net_rate: item.netRate ?? 0,
         taxable_value: item.taxableValue ?? 0,
         gst_rate: item.gstRate ?? 0,
@@ -551,6 +574,44 @@ export class VoucherService {
         amount: item.amount ?? 0
       }))
     };
+  }
+
+  // Edit a saved voucher, keeping its number. To avoid any chance of losing the
+  // voucher if the new data is invalid, we build the replacement FIRST under a
+  // temporary number (this validates it and lays down fresh stock rows), then in
+  // one transaction remove the old voucher + its stock and adopt the real number.
+  async updateVoucher(type, id, payload) {
+    const config = VOUCHER_MODELS[type];
+    if (!config) {
+      throw new Error(`Unknown voucher type: ${type}`);
+    }
+
+    const prisma = getPrismaClient();
+    const existing = await prisma[config.model].findFirst({
+      where: { id: Number(id), deletedAt: null }
+    });
+    if (!existing) {
+      throw new AppError('Voucher not found', 'VOUCHER_NOT_FOUND', 404);
+    }
+
+    const realNo = existing.voucherNo;
+    const tempNo = `${realNo}~EDIT~${Date.now()}`;
+
+    // 1) Create the replacement under a temp number (throws here if invalid — old
+    //    voucher is still untouched).
+    const created = await this[config.saveMethod]({ ...payload, voucher_no: tempNo });
+
+    // 2) Swap: delete the old voucher + its stock (linked by transactionNo), then
+    //    rename the new voucher and its stock rows to the real number.
+    await prisma.$transaction(async (tx) => {
+      await tx.stockTransaction.deleteMany({ where: { transactionNo: realNo } });
+      await tx[config.itemModel].deleteMany({ where: { [config.itemFk]: Number(id) } });
+      await tx[config.model].delete({ where: { id: Number(id) } });
+      await tx[config.model].update({ where: { id: created.id }, data: { voucherNo: realNo } });
+      await tx.stockTransaction.updateMany({ where: { transactionNo: tempNo }, data: { transactionNo: realNo } });
+    });
+
+    return { id: created.id, voucher_no: realNo };
   }
 
   async getProductionSettings() {
