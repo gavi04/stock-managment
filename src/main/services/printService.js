@@ -25,7 +25,12 @@ const PARTY_LABELS = {
   purchase_return: 'Supplier'
 };
 
-const MIN_ROWS = 8; // pad the item grid so short vouchers keep a consistent height
+const MIN_ROWS = 0; // receipt paper is dynamic length — no empty padding rows
+
+// Receipt printer paper: fixed 5.5" width, length grows with content.
+const RECEIPT_WIDTH_IN = 5.5;
+const PX_PER_IN = 96;
+const MICRON_PER_IN = 25400;
 
 function esc(value) {
   return String(value ?? '')
@@ -145,10 +150,11 @@ export class PrintService {
     const tmpFile = path.join(app.getPath('temp'), `stockops-voucher-${Date.now()}.html`);
     await fs.promises.writeFile(tmpFile, html, 'utf8');
 
+    const widthPx = Math.round(RECEIPT_WIDTH_IN * PX_PER_IN);
     const win = new BrowserWindow({
       show: false,
-      width: 820,
-      height: 1160,
+      width: widthPx,
+      height: 1200,
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
     });
 
@@ -161,13 +167,27 @@ export class PrintService {
       await win.loadFile(tmpFile);
       await new Promise((resolve) => setTimeout(resolve, 300));
 
+      // Measure the rendered content height so the "page" is exactly as long as
+      // the receipt content — fixed 5.5" width, dynamic length.
+      let contentHeightPx = 800;
+      try {
+        contentHeightPx = await win.webContents.executeJavaScript(
+          'Math.ceil(document.body.getBoundingClientRect().height)'
+        );
+      } catch {
+        /* fall back to default height */
+      }
+
+      const widthMicron = Math.round(RECEIPT_WIDTH_IN * MICRON_PER_IN);
+      const heightMicron = Math.max(Math.round(((contentHeightPx + 24) / PX_PER_IN) * MICRON_PER_IN), MICRON_PER_IN);
+
       const result = await new Promise((resolve) => {
         win.webContents.print(
           {
             silent: false,
             printBackground: true,
-            pageSize: 'A4',
-            margins: { marginType: 'default' }
+            margins: { marginType: 'none' },
+            pageSize: { width: widthMicron, height: heightMicron }
           },
           (success, failureReason) => resolve({ success, failureReason })
         );

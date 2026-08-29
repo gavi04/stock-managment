@@ -2652,27 +2652,28 @@ const tradeTemplate = `<!--
 <meta charset="utf-8" />
 <title>{{SERIAL_NO}}</title>
 <style>
+  /* Receipt printer: fixed 5.5in width, dynamic length. */
   * { box-sizing: border-box; }
-  html, body { width: 210mm; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 0; }
-  .company { text-align: center; font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
-  .doc-title { text-align: center; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 10px; }
-  .sheet { border: 1.5px solid #222; border-radius: 8px; padding: 16px 18px; }
-  .head { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 12px; }
-  .hf { display: flex; gap: 8px; align-items: baseline; }
+  html, body { width: 5.5in; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 6px 8px; font-size: 11px; }
+  .company { text-align: center; font-size: 15px; font-weight: 800; margin: 2px 0; }
+  .doc-title { text-align: center; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #555; margin-bottom: 6px; }
+  .sheet { border: 1px solid #222; border-radius: 5px; padding: 8px; }
+  .head { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-bottom: 8px; }
+  .hf { display: flex; gap: 6px; align-items: baseline; }
   .hf:nth-child(even) { justify-content: flex-end; }
-  .hf span { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: #333; }
-  .hf b { font-size: 13px; font-weight: 600; }
+  .hf span { font-size: 9px; font-weight: 800; letter-spacing: 0.03em; color: #333; }
+  .hf b { font-size: 11px; font-weight: 600; }
   .hf b.dash { letter-spacing: 2px; color: #444; }
   table.grid { width: 100%; border-collapse: collapse; }
-  table.grid th, table.grid td { border: 1px solid #333; padding: 6px 8px; font-size: 12px; }
-  table.grid th { background: #f2f0ea; text-align: left; font-size: 11px; letter-spacing: 0.03em; }
+  table.grid th, table.grid td { border: 1px solid #333; padding: 3px 4px; font-size: 10px; }
+  table.grid th { background: #f2f0ea; text-align: left; font-size: 9px; letter-spacing: 0.02em; }
   table.grid td.n, table.grid th.n { text-align: right; font-variant-numeric: tabular-nums; }
   table.grid td.c, table.grid th.c { text-align: center; }
-  table.grid tfoot td { font-weight: 800; font-size: 13px; }
-  .grand-label { letter-spacing: 0.05em; }
-  .foot { margin-top: 28px; display: flex; justify-content: space-between; font-size: 12px; color: #444; }
-  @page { size: A4; margin: 14mm; }
+  table.grid tfoot td { font-weight: 800; font-size: 11px; }
+  .grand-label { letter-spacing: 0.04em; }
+  .foot { margin-top: 20px; display: flex; justify-content: space-between; font-size: 10px; color: #444; }
+  @page { margin: 0; }
 </style>
 </head>
 <body>
@@ -2736,24 +2737,25 @@ const productionTemplate = `<!--
 <meta charset="utf-8" />
 <title>{{SERIAL_NO}}</title>
 <style>
+  /* Receipt printer: fixed 5.5in width, dynamic length. */
   * { box-sizing: border-box; }
-  html, body { width: 210mm; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 0; }
-  .company { text-align: center; font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
-  .doc-title { text-align: center; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 10px; }
-  .sheet { border: 1.5px solid #222; border-radius: 8px; padding: 16px 18px; }
-  .head { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 12px; }
-  .hf { display: flex; gap: 8px; align-items: baseline; }
+  html, body { width: 5.5in; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 6px 8px; font-size: 11px; }
+  .company { text-align: center; font-size: 15px; font-weight: 800; margin: 2px 0; }
+  .doc-title { text-align: center; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #555; margin-bottom: 6px; }
+  .sheet { border: 1px solid #222; border-radius: 5px; padding: 8px; }
+  .head { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-bottom: 8px; }
+  .hf { display: flex; gap: 6px; align-items: baseline; }
   .hf.full { grid-column: 1 / -1; }
-  .hf span { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: #333; }
-  .hf b { font-size: 13px; font-weight: 600; }
+  .hf span { font-size: 9px; font-weight: 800; letter-spacing: 0.03em; color: #333; }
+  .hf b { font-size: 11px; font-weight: 600; }
   table.grid { width: 100%; border-collapse: collapse; }
-  table.grid th, table.grid td { border: 1px solid #333; padding: 6px 8px; font-size: 12px; }
-  table.grid th { background: #f2f0ea; text-align: left; font-size: 11px; letter-spacing: 0.03em; }
+  table.grid th, table.grid td { border: 1px solid #333; padding: 3px 4px; font-size: 10px; }
+  table.grid th { background: #f2f0ea; text-align: left; font-size: 9px; letter-spacing: 0.02em; }
   table.grid td.n, table.grid th.n { text-align: right; font-variant-numeric: tabular-nums; }
   table.grid td.c, table.grid th.c { text-align: center; }
-  .foot { margin-top: 28px; display: flex; justify-content: space-between; font-size: 12px; color: #444; }
-  @page { size: A4; margin: 14mm; }
+  .foot { margin-top: 20px; display: flex; justify-content: space-between; font-size: 10px; color: #444; }
+  @page { margin: 0; }
 </style>
 </head>
 <body>
@@ -2813,7 +2815,10 @@ const PARTY_LABELS = {
   sale_return: "Party Name",
   purchase_return: "Supplier"
 };
-const MIN_ROWS = 8;
+const MIN_ROWS = 0;
+const RECEIPT_WIDTH_IN = 5.5;
+const PX_PER_IN = 96;
+const MICRON_PER_IN = 25400;
 function esc(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -2901,10 +2906,11 @@ class PrintService {
     const html = buildHtml(voucher, companyName);
     const tmpFile = path.join(electron.app.getPath("temp"), `stockops-voucher-${Date.now()}.html`);
     await fs.promises.writeFile(tmpFile, html, "utf8");
+    const widthPx = Math.round(RECEIPT_WIDTH_IN * PX_PER_IN);
     const win = new electron.BrowserWindow({
       show: false,
-      width: 820,
-      height: 1160,
+      width: widthPx,
+      height: 1200,
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
     });
     const cleanup = () => {
@@ -2915,13 +2921,22 @@ class PrintService {
     try {
       await win.loadFile(tmpFile);
       await new Promise((resolve) => setTimeout(resolve, 300));
+      let contentHeightPx = 800;
+      try {
+        contentHeightPx = await win.webContents.executeJavaScript(
+          "Math.ceil(document.body.getBoundingClientRect().height)"
+        );
+      } catch {
+      }
+      const widthMicron = Math.round(RECEIPT_WIDTH_IN * MICRON_PER_IN);
+      const heightMicron = Math.max(Math.round((contentHeightPx + 24) / PX_PER_IN * MICRON_PER_IN), MICRON_PER_IN);
       const result = await new Promise((resolve) => {
         win.webContents.print(
           {
             silent: false,
             printBackground: true,
-            pageSize: "A4",
-            margins: { marginType: "default" }
+            margins: { marginType: "none" },
+            pageSize: { width: widthMicron, height: heightMicron }
           },
           (success, failureReason) => resolve({ success, failureReason })
         );
