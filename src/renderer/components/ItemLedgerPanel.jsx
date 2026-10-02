@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDdmmyyyyTime } from '../utils/dateFormat.js';
 
 export function ItemLedgerPanel({ products }) {
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -109,7 +110,7 @@ export function ItemLedgerPanel({ products }) {
                 ) : (
                   ledger.map((row, idx) => (
                     <tr key={idx}>
-                      <td>{new Date(row.date).toLocaleString()}</td>
+                      <td>{formatDdmmyyyyTime(row.date)}</td>
                       <td>{row.voucher}</td>
                       <td>{row.type}</td>
                       <td style={{ color: row.qty_in > 0 ? 'var(--good)' : 'inherit' }}>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDdmmyyyy } from '../utils/dateFormat.js';
 
 // Local calendar date as yyyy-mm-dd (date inputs expect this format). Using local
 // time — not UTC — so "today" matches the user's wall clock near midnight.
@@ -17,17 +18,21 @@ function daysAgoStr(n) {
 const fmt = (value) => Number(value || 0).toFixed(3);
 const cell = (value) => (Number(value) > 0 ? fmt(value) : '-');
 
-// Two-row grouped header (Stock In / Stock Out). `firstCol` is the label for the
-// leftmost column (Item on the summary, Date in the drill-down).
-function GroupedHead({ firstCol }) {
+// Two-row grouped header (Stock In / Stock Out). `leadCols` is the list of
+// leftmost column labels (Item Name/Size/Length on the summary, Date in the
+// drill-down).
+function GroupedHead({ leadCols, trailCol }) {
   return (
     <thead>
       <tr>
-        <th rowSpan={2}>{firstCol}</th>
+        {leadCols.map((label) => (
+          <th key={label} rowSpan={2}>{label}</th>
+        ))}
         <th rowSpan={2} className="num">Opening</th>
         <th colSpan={4} className="grp grp-in">Stock In</th>
         <th colSpan={4} className="grp grp-out">Stock Out</th>
         <th rowSpan={2} className="num">Closing</th>
+        {trailCol ? <th rowSpan={2} className="num">{trailCol}</th> : null}
       </tr>
       <tr>
         <th className="num sub-in">Purchase</th>
@@ -43,19 +48,60 @@ function GroupedHead({ firstCol }) {
   );
 }
 
-function MovementCells(row) {
+// The 8 in/out cells; `show` turns zeros into '-' (data rows) or keeps them (totals).
+function MovementCells(row, show = cell) {
   return (
     <>
-      <td className="num sub-in">{cell(row.purchase)}</td>
-      <td className="num sub-in">{cell(row.sale_return)}</td>
-      <td className="num sub-in">{cell(row.production_in)}</td>
-      <td className="num sub-in total in-total">{cell(row.total_in)}</td>
-      <td className="num sub-out">{cell(row.sale)}</td>
-      <td className="num sub-out">{cell(row.purchase_return)}</td>
-      <td className="num sub-out">{cell(row.issue)}</td>
-      <td className="num sub-out total out-total">{cell(row.total_out)}</td>
+      <td className="num sub-in">{show(row.purchase)}</td>
+      <td className="num sub-in">{show(row.sale_return)}</td>
+      <td className="num sub-in">{show(row.production_in)}</td>
+      <td className="num sub-in total in-total">{show(row.total_in)}</td>
+      <td className="num sub-out">{show(row.sale)}</td>
+      <td className="num sub-out">{show(row.purchase_return)}</td>
+      <td className="num sub-out">{show(row.issue)}</td>
+      <td className="num sub-out total out-total">{show(row.total_out)}</td>
     </>
   );
+}
+
+// Build summary rows grouped by size. The per-size total (sum of Closing) is a
+// single cell on the far right, merged (rowSpan) across the group's rows — like
+// the reference Excel — instead of a subtotal row in between.
+function renderGroupedSummary(summary, onRowClick) {
+  const out = [];
+  let i = 0;
+
+  while (i < summary.length) {
+    const size = summary[i].size || '';
+    let end = i;
+    let closingTotal = 0;
+    while (end < summary.length && (summary[end].size || '') === size) {
+      closingTotal += Number(summary[end].closing) || 0;
+      end += 1;
+    }
+    const groupCount = end - i;
+
+    for (let k = i; k < end; k += 1) {
+      const row = summary[k];
+      out.push(
+        <tr key={row.product_id} className="clickable-row" onClick={() => onRowClick(row)} title="View day-wise entries">
+          <td className="item-name">{row.item}</td>
+          <td>{row.size || '-'}</td>
+          <td>{row.length || '-'}</td>
+          <td className="num">{fmt(row.opening)}</td>
+          {MovementCells(row)}
+          <td className="num closing" style={{ color: Number(row.closing) < 0 ? 'var(--bad)' : undefined }}>
+            {fmt(row.closing)}
+          </td>
+          {k === i ? (
+            <td className="num size-total" rowSpan={groupCount}>{fmt(closingTotal)}</td>
+          ) : null}
+        </tr>
+      );
+    }
+    i = end;
+  }
+  return out;
 }
 
 // Popup: the day-by-day entries for one item over the selected range.
@@ -84,7 +130,7 @@ function BreakdownModal({ item, rows, loading, error, onClose }) {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="daily-summary-table">
-              <GroupedHead firstCol="Date" />
+              <GroupedHead leadCols={['Date']} />
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
@@ -95,7 +141,7 @@ function BreakdownModal({ item, rows, loading, error, onClose }) {
                 ) : (
                   rows.map((row, idx) => (
                     <tr key={`${row.date}-${idx}`}>
-                      <td>{row.date}</td>
+                      <td>{formatDdmmyyyy(row.date)}</td>
                       <td className="num">{fmt(row.opening)}</td>
                       {MovementCells(row)}
                       <td className="num closing" style={{ color: Number(row.closing) < 0 ? 'var(--bad)' : undefined }}>
@@ -281,30 +327,16 @@ export function DailyStockSummaryPanel({ products, categories }) {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="daily-summary-table">
-              <GroupedHead firstCol="Item Code" />
+              <GroupedHead leadCols={['Item Name', 'Size', 'Length']} trailCol="Size Total" />
               <tbody>
                 {summary.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ textAlign: 'center', padding: '20px' }}>
+                    <td colSpan={14} style={{ textAlign: 'center', padding: '20px' }}>
                       No stock to show for the selected period.
                     </td>
                   </tr>
                 ) : (
-                  summary.map((row) => (
-                    <tr
-                      key={row.product_id}
-                      className="clickable-row"
-                      onClick={() => openBreakdown(row)}
-                      title="View day-wise entries"
-                    >
-                      <td className="item-name">{row.code || row.item}</td>
-                      <td className="num">{fmt(row.opening)}</td>
-                      {MovementCells(row)}
-                      <td className="num closing" style={{ color: Number(row.closing) < 0 ? 'var(--bad)' : undefined }}>
-                        {fmt(row.closing)}
-                      </td>
-                    </tr>
-                  ))
+                  renderGroupedSummary(summary, openBreakdown)
                 )}
               </tbody>
             </table>

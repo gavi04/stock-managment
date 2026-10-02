@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDdmmyyyyTime } from '../utils/dateFormat.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -184,7 +185,7 @@ export function VoucherEntryPanel({ title, products, parties, onSubmitVoucher, s
             recentVouchers.map((voucher) => (
               <tr key={voucher.voucher_no}>
                 <td>{voucher.voucher_no}</td>
-                <td>{new Date(voucher.date).toLocaleString()}</td>
+                <td>{formatDdmmyyyyTime(voucher.date)}</td>
                 <td>{voucher.item || '-'}</td>
                 <td>{voucher.party}</td>
                 <td>{Number(voucher.total).toFixed(2)}</td>

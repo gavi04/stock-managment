@@ -1,3 +1,5 @@
+import { formatDdmmyyyyTime } from '../utils/dateFormat.js';
+
 function MetricCard({ title, value, tone = 'neutral' }) {
   return (
     <article className="metric-card">
@@ -69,7 +71,7 @@ export function DashboardView({ summary, vouchers }) {
                 <tr key={voucher.voucher_no}>
                   <td>{voucher.voucher_no}</td>
                   <td>{voucher.type}</td>
-                  <td>{new Date(voucher.date).toLocaleString()}</td>
+                  <td>{formatDdmmyyyyTime(voucher.date)}</td>
                   <td>{voucher.party}</td>
                   <td>{Number(voucher.total).toFixed(2)}</td>
                   <td>{voucher.status}</td>

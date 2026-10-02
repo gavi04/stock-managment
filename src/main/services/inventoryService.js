@@ -185,14 +185,25 @@ export class InventoryService {
 
     const products = await prisma.product.findMany({
       where: productWhere,
-      select: { id: true, name: true, code: true }
+      select: { id: true, name: true, code: true, size: true, length: true }
     });
     const productIds = products.map((product) => product.id);
     const productNameById = new Map(products.map((product) => [product.id, product.name]));
     const productCodeById = new Map(products.map((product) => [product.id, product.code]));
+    // Item code is name/size/length — expose the parts for the report's columns.
+    const productMetaById = new Map(
+      products.map((product) => [product.id, { size: product.size || '', length: product.length || '' }])
+    );
 
     if (productIds.length === 0) {
-      return { dailyRows: [], preRange: new Map(), productNameById, productCodeById, openingInRange: new Map() };
+      return {
+        dailyRows: [],
+        preRange: new Map(),
+        productNameById,
+        productCodeById,
+        productMetaById,
+        openingInRange: new Map()
+      };
     }
 
     const openingAgg = await prisma.stockTransaction.groupBy({
@@ -328,7 +339,7 @@ export class InventoryService {
       runningBalance.set(bucket.product_id, closing);
     }
 
-    return { dailyRows: result, preRange, productNameById, productCodeById, openingInRange };
+    return { dailyRows: result, preRange, productNameById, productCodeById, productMetaById, openingInRange };
   }
 
   // Day-by-day breakdown for the drill-down popup (pass a productId in filters).
@@ -342,7 +353,7 @@ export class InventoryService {
   // "to" date. Items that have a balance but no movement in the range are shown
   // with opening = closing.
   async getDailyStockSummary(filters = {}) {
-    const { dailyRows, preRange, productNameById, productCodeById, openingInRange } =
+    const { dailyRows, preRange, productNameById, productCodeById, productMetaById, openingInRange } =
       await this.computeDailyRows(filters);
 
     const byProduct = new Map();
@@ -376,12 +387,13 @@ export class InventoryService {
 
     const result = [];
     for (const [productId, name] of productNameById) {
-      // Opening = balance before the range PLUS any opening stock entered inside
-      // the range (a newly-created item shows its opening qty in the Opening
-      // column rather than as an inflow).
-      const opening = (preRange.get(productId) ?? 0) + (openingInRange.get(productId) ?? 0);
+      // Opening = balance strictly before the range. Opening stock entered inside
+      // the range counts as an inflow (included in Total In), not as opening.
+      const opening = preRange.get(productId) ?? 0;
+      const openInRange = openingInRange.get(productId) ?? 0;
       const sum = byProduct.get(productId);
       const code = productCodeById.get(productId) ?? '';
+      const meta = productMetaById.get(productId) ?? { size: '', length: '' };
 
       if (!sum) {
         // No movement in the range — only show it if it carries a balance.
@@ -390,6 +402,8 @@ export class InventoryService {
           product_id: productId,
           item: name,
           code,
+          size: meta.size,
+          length: meta.length,
           opening,
           purchase: 0,
           sale_return: 0,
@@ -408,11 +422,14 @@ export class InventoryService {
         product_id: productId,
         item: name,
         code,
+        size: meta.size,
+        length: meta.length,
         opening,
         purchase: sum.purchase,
         sale_return: sum.sale_return,
         production_in: sum.production_in,
-        total_in: sum.total_in,
+        // Opening stock added within the range is an inflow — include it in Total In.
+        total_in: sum.total_in + openInRange,
         sale: sum.sale,
         purchase_return: sum.purchase_return,
         issue: sum.issue,
@@ -421,7 +438,14 @@ export class InventoryService {
       });
     }
 
-    result.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+    // Group by size, then by item name, then length — so same-size items sit
+    // together for the grouped report view.
+    result.sort(
+      (a, b) =>
+        String(a.size).localeCompare(String(b.size)) ||
+        String(a.item).localeCompare(String(b.item)) ||
+        String(a.length).localeCompare(String(b.length))
+    );
     return result;
   }
 }

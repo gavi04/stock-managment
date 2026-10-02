@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatDdmmyyyy } from '../utils/dateFormat.js';
 
 const FIRST_FIELD_SELECTOR =
   'input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])';
@@ -153,7 +154,7 @@ export function AppShell({ navigation, activeKey, onNavigate, headerTitle, child
       <main className="content-area" ref={contentRef}>
         <header className="content-header">
           <h1>{headerTitle}</h1>
-          <p>Overview as of {new Date().toLocaleDateString()}</p>
+          <p>Overview as of {formatDdmmyyyy(new Date())}</p>
         </header>
         {children}
       </main>

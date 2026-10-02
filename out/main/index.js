@@ -1627,13 +1627,23 @@ class InventoryService {
     const rangeEnd = endOfDayUtc(to);
     const products = await prisma2.product.findMany({
       where: productWhere,
-      select: { id: true, name: true, code: true }
+      select: { id: true, name: true, code: true, size: true, length: true }
     });
     const productIds = products.map((product) => product.id);
     const productNameById = new Map(products.map((product) => [product.id, product.name]));
     const productCodeById = new Map(products.map((product) => [product.id, product.code]));
+    const productMetaById = new Map(
+      products.map((product) => [product.id, { size: product.size || "", length: product.length || "" }])
+    );
     if (productIds.length === 0) {
-      return { dailyRows: [], preRange: /* @__PURE__ */ new Map(), productNameById, productCodeById, openingInRange: /* @__PURE__ */ new Map() };
+      return {
+        dailyRows: [],
+        preRange: /* @__PURE__ */ new Map(),
+        productNameById,
+        productCodeById,
+        productMetaById,
+        openingInRange: /* @__PURE__ */ new Map()
+      };
     }
     const openingAgg = await prisma2.stockTransaction.groupBy({
       by: ["productId"],
@@ -1749,7 +1759,7 @@ class InventoryService {
       });
       runningBalance.set(bucket.product_id, closing);
     }
-    return { dailyRows: result, preRange, productNameById, productCodeById, openingInRange };
+    return { dailyRows: result, preRange, productNameById, productCodeById, productMetaById, openingInRange };
   }
   // Day-by-day breakdown for the drill-down popup (pass a productId in filters).
   async getDailyStockBreakdown(filters = {}) {
@@ -1761,7 +1771,7 @@ class InventoryService {
   // "to" date. Items that have a balance but no movement in the range are shown
   // with opening = closing.
   async getDailyStockSummary(filters = {}) {
-    const { dailyRows, preRange, productNameById, productCodeById, openingInRange } = await this.computeDailyRows(filters);
+    const { dailyRows, preRange, productNameById, productCodeById, productMetaById, openingInRange } = await this.computeDailyRows(filters);
     const byProduct = /* @__PURE__ */ new Map();
     for (const row of dailyRows) {
       let sum = byProduct.get(row.product_id);
@@ -1792,15 +1802,19 @@ class InventoryService {
     }
     const result = [];
     for (const [productId, name] of productNameById) {
-      const opening = (preRange.get(productId) ?? 0) + (openingInRange.get(productId) ?? 0);
+      const opening = preRange.get(productId) ?? 0;
+      const openInRange = openingInRange.get(productId) ?? 0;
       const sum = byProduct.get(productId);
       const code = productCodeById.get(productId) ?? "";
+      const meta = productMetaById.get(productId) ?? { size: "", length: "" };
       if (!sum) {
         if (Math.abs(opening) < 1e-9) continue;
         result.push({
           product_id: productId,
           item: name,
           code,
+          size: meta.size,
+          length: meta.length,
           opening,
           purchase: 0,
           sale_return: 0,
@@ -1818,11 +1832,14 @@ class InventoryService {
         product_id: productId,
         item: name,
         code,
+        size: meta.size,
+        length: meta.length,
         opening,
         purchase: sum.purchase,
         sale_return: sum.sale_return,
         production_in: sum.production_in,
-        total_in: sum.total_in,
+        // Opening stock added within the range is an inflow — include it in Total In.
+        total_in: sum.total_in + openInRange,
         sale: sum.sale,
         purchase_return: sum.purchase_return,
         issue: sum.issue,
@@ -1830,7 +1847,9 @@ class InventoryService {
         closing: sum.closing
       });
     }
-    result.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+    result.sort(
+      (a, b) => String(a.size).localeCompare(String(b.size)) || String(a.item).localeCompare(String(b.item)) || String(a.length).localeCompare(String(b.length))
+    );
     return result;
   }
 }
@@ -3103,14 +3122,15 @@ class ReportService {
     }
     return workbook.xlsx.writeBuffer();
   }
-  // Formatted Daily Stock Summary workbook: title + period, grouped columns,
-  // 3-decimal numbers. `rows` are the per-item summary rows.
+  // Formatted Daily Stock Summary workbook: title + period, Item Name/Size/Length
+  // columns, grouped by size with a subtotal row per size, 3-decimal numbers.
   async exportDailySummaryExcel(rows = [], meta = {}) {
     const workbook = new ExcelJS.Workbook();
     const ws = workbook.addWorksheet("Daily Stock Summary");
     const headers = [
-      "Item Code",
       "Item Name",
+      "Size",
+      "Length",
       "Opening",
       "Purchase",
       "Sale Return",
@@ -3120,8 +3140,13 @@ class ReportService {
       "Purch. Return",
       "Issue",
       "Total Out",
-      "Closing"
+      "Closing",
+      "Size Total"
     ];
+    const NUM_START = 4;
+    const TOTAL_COL = headers.length;
+    const fields = ["opening", "purchase", "sale_return", "production_in", "total_in", "sale", "purchase_return", "issue", "total_out", "closing"];
+    const n = (v) => Number(v || 0);
     const titleRow = ws.addRow(["Daily Stock Summary"]);
     titleRow.font = { bold: true, size: 14 };
     ws.mergeCells(titleRow.number, 1, titleRow.number, headers.length);
@@ -3136,30 +3161,41 @@ class ReportService {
       cell.border = { bottom: { style: "thin", color: { argb: "FF999999" } } };
       cell.alignment = { horizontal: "center" };
     });
-    const n = (v) => Number(v || 0);
-    for (const r of rows) {
-      const row = ws.addRow([
-        r.code || "",
-        r.item || "",
-        n(r.opening),
-        n(r.purchase),
-        n(r.sale_return),
-        n(r.production_in),
-        n(r.total_in),
-        n(r.sale),
-        n(r.purchase_return),
-        n(r.issue),
-        n(r.total_out),
-        n(r.closing)
-      ]);
-      for (let c = 3; c <= headers.length; c += 1) {
+    const applyNumFmt = (row) => {
+      for (let c = NUM_START; c <= headers.length; c += 1) {
         row.getCell(c).numFmt = "0.000";
         row.getCell(c).alignment = { horizontal: "right" };
       }
+    };
+    let i = 0;
+    while (i < rows.length) {
+      const size = rows[i].size || "";
+      let end = i;
+      let closingTotal = 0;
+      while (end < rows.length && (rows[end].size || "") === size) {
+        closingTotal += n(rows[end].closing);
+        end += 1;
+      }
+      const startRowNum = ws.rowCount + 1;
+      for (let k = i; k < end; k += 1) {
+        const r = rows[k];
+        const row = ws.addRow([r.item || "", r.size || "", r.length || "", ...fields.map((f) => n(r[f])), null]);
+        applyNumFmt(row);
+      }
+      const endRowNum = ws.rowCount;
+      if (end - i > 1) ws.mergeCells(startRowNum, TOTAL_COL, endRowNum, TOTAL_COL);
+      const totalCell = ws.getCell(startRowNum, TOTAL_COL);
+      totalCell.value = closingTotal;
+      totalCell.numFmt = "0.000";
+      totalCell.font = { bold: true };
+      totalCell.alignment = { horizontal: "right", vertical: "middle" };
+      totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1EFE7" } };
+      i = end;
     }
-    ws.getColumn(1).width = 16;
-    ws.getColumn(2).width = 26;
-    for (let c = 3; c <= headers.length; c += 1) ws.getColumn(c).width = 13;
+    ws.getColumn(1).width = 24;
+    ws.getColumn(2).width = 14;
+    ws.getColumn(3).width = 12;
+    for (let c = NUM_START; c <= headers.length; c += 1) ws.getColumn(c).width = 12;
     return workbook.xlsx.writeBuffer();
   }
   exportPdf(rows, title = "Report") {

@@ -738,6 +738,15 @@ th {
   font-weight: 700;
 }
 
+/* Per-size total, merged on the far right of the grouped summary. */
+.daily-summary-table td.size-total {
+  font-weight: 800;
+  text-align: right;
+  vertical-align: middle;
+  background: #f1efe7;
+  border-left: 1.5px solid #cfc9bb;
+}
+
 /* ---- Excel import ---- */
 .import-help {
   border: 1px solid var(--border);

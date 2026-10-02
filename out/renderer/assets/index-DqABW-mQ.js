@@ -12914,6 +12914,33 @@ const VIEW_LABELS = {
   "daily-stock-summary": "Daily Stock Summary",
   "item-stock-ledger": "Item Stock Ledger"
 };
+function todayDdmmyyyy() {
+  const d = /* @__PURE__ */ new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+function formatDdmmyyyy(value) {
+  if (value == null || value === "") return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [y, m, d] = value.slice(0, 10).split("-");
+    return `${d}/${m}/${y}`;
+  }
+  const dt = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(dt.getTime())) return String(value);
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+}
+function formatDdmmyyyyTime(value) {
+  if (value == null || value === "") return "";
+  const dt = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(dt.getTime())) return String(value);
+  const date = formatDdmmyyyy(dt);
+  const hh = String(dt.getHours()).padStart(2, "0");
+  const mi = String(dt.getMinutes()).padStart(2, "0");
+  return `${date} ${hh}:${mi}`;
+}
 const FIRST_FIELD_SELECTOR = "input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])";
 const ICONS = {
   dashboard: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
@@ -13039,7 +13066,7 @@ function AppShell({ navigation, activeKey, onNavigate, headerTitle, children, on
         /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { children: headerTitle }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
           "Overview as of ",
-          (/* @__PURE__ */ new Date()).toLocaleDateString()
+          formatDdmmyyyy(/* @__PURE__ */ new Date())
         ] })
       ] }),
       children
@@ -13089,7 +13116,7 @@ function DashboardView({ summary, vouchers }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: vouchers.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 6, children: "No vouchers yet." }) }) : vouchers.map((voucher) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.voucher_no }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.type }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(voucher.date).toLocaleString() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatDdmmyyyyTime(voucher.date) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.party }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: Number(voucher.total).toFixed(2) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: voucher.status })
@@ -13428,12 +13455,6 @@ function handleGridKeyNav(e, { onAppendRow } = {}) {
       return;
     }
   }
-}
-function todayDdmmyyyy() {
-  const d = /* @__PURE__ */ new Date();
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 const FOCUSABLE$1 = "input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])";
 function visibleFocusables(container) {
@@ -16642,7 +16663,7 @@ function ItemLedgerPanel({ products }) {
           ] })
         ] }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: ledger.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 6, children: "No transactions found for this item." }) }) : ledger.map((row, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(row.date).toLocaleString() }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatDdmmyyyyTime(row.date) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.voucher }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.type }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: { color: row.qty_in > 0 ? "var(--good)" : "inherit" }, children: row.qty_in > 0 ? Number(row.qty_in).toFixed(3) : "-" }),
@@ -16665,14 +16686,15 @@ function daysAgoStr(n2) {
 }
 const fmt = (value) => Number(value || 0).toFixed(3);
 const cell = (value) => Number(value) > 0 ? fmt(value) : "-";
-function GroupedHead({ firstCol }) {
+function GroupedHead({ leadCols, trailCol }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("thead", { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, children: firstCol }),
+      leadCols.map((label) => /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, children: label }, label)),
       /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, className: "num", children: "Opening" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("th", { colSpan: 4, className: "grp grp-in", children: "Stock In" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("th", { colSpan: 4, className: "grp grp-out", children: "Stock Out" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, className: "num", children: "Closing" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, className: "num", children: "Closing" }),
+      trailCol ? /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, className: "num", children: trailCol }) : null
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "num sub-in", children: "Purchase" }),
@@ -16686,17 +16708,47 @@ function GroupedHead({ firstCol }) {
     ] })
   ] });
 }
-function MovementCells(row) {
+function MovementCells(row, show = cell) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in", children: cell(row.purchase) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in", children: cell(row.sale_return) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in", children: cell(row.production_in) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in total in-total", children: cell(row.total_in) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out", children: cell(row.sale) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out", children: cell(row.purchase_return) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out", children: cell(row.issue) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out total out-total", children: cell(row.total_out) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in", children: show(row.purchase) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in", children: show(row.sale_return) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in", children: show(row.production_in) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-in total in-total", children: show(row.total_in) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out", children: show(row.sale) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out", children: show(row.purchase_return) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out", children: show(row.issue) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num sub-out total out-total", children: show(row.total_out) })
   ] });
+}
+function renderGroupedSummary(summary, onRowClick) {
+  const out = [];
+  let i2 = 0;
+  while (i2 < summary.length) {
+    const size = summary[i2].size || "";
+    let end = i2;
+    let closingTotal = 0;
+    while (end < summary.length && (summary[end].size || "") === size) {
+      closingTotal += Number(summary[end].closing) || 0;
+      end += 1;
+    }
+    const groupCount = end - i2;
+    for (let k = i2; k < end; k += 1) {
+      const row = summary[k];
+      out.push(
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "clickable-row", onClick: () => onRowClick(row), title: "View day-wise entries", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "item-name", children: row.item }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.size || "-" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.length || "-" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num", children: fmt(row.opening) }),
+          MovementCells(row),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num closing", style: { color: Number(row.closing) < 0 ? "var(--bad)" : void 0 }, children: fmt(row.closing) }),
+          k === i2 ? /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num size-total", rowSpan: groupCount, children: fmt(closingTotal) }) : null
+        ] }, row.product_id)
+      );
+    }
+    i2 = end;
+  }
+  return out;
 }
 function BreakdownModal({ item, rows, loading, error, onClose }) {
   reactExports.useEffect(() => {
@@ -16715,9 +16767,9 @@ function BreakdownModal({ item, rows, loading, error, onClose }) {
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "voucher-modal-close", onClick: onClose, "aria-label": "Close", children: "×" })
     ] }),
     loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Loading…" }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: error }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowX: "auto" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "daily-summary-table", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(GroupedHead, { firstCol: "Date" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(GroupedHead, { leadCols: ["Date"] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: rows.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 11, style: { textAlign: "center", padding: "16px" }, children: "No movements in this period." }) }) : rows.map((row, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: row.date }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: formatDdmmyyyy(row.date) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num", children: fmt(row.opening) }),
         MovementCells(row),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num closing", style: { color: Number(row.closing) < 0 ? "var(--bad)" : void 0 }, children: fmt(row.closing) })
@@ -16851,22 +16903,8 @@ function DailyStockSummaryPanel({ products, categories }) {
       exportMsg ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "stock-hint", style: { marginTop: "8px" }, children: exportMsg }) : null
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "panel", children: loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Loading summary..." }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "error-message", children: error }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowX: "auto" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "daily-summary-table", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(GroupedHead, { firstCol: "Item Code" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: summary.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 11, style: { textAlign: "center", padding: "20px" }, children: "No stock to show for the selected period." }) }) : summary.map((row) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "tr",
-        {
-          className: "clickable-row",
-          onClick: () => openBreakdown(row),
-          title: "View day-wise entries",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "item-name", children: row.code || row.item }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num", children: fmt(row.opening) }),
-            MovementCells(row),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "num closing", style: { color: Number(row.closing) < 0 ? "var(--bad)" : void 0 }, children: fmt(row.closing) })
-          ]
-        },
-        row.product_id
-      )) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(GroupedHead, { leadCols: ["Item Name", "Size", "Length"], trailCol: "Size Total" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: summary.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 14, style: { textAlign: "center", padding: "20px" }, children: "No stock to show for the selected period." }) }) : renderGroupedSummary(summary, openBreakdown) })
     ] }) }) }),
     openItem != null ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       BreakdownModal,
