@@ -306,11 +306,11 @@ export function SaleReturnVoucherPanel({ products, parties, busy, onSave, onUpda
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '16px' }}>
-          <button type="button" className="ghost-light-btn" onClick={() => handleSave(true)} disabled={busy} style={{ minWidth: '120px' }}>
-            {busy ? 'Working…' : editingId ? 'Update & Print' : 'Save & Print'}
-          </button>
           <button type="button" onClick={() => handleSave(false)} disabled={busy} style={{ minWidth: '120px' }}>
             {busy ? 'Saving...' : editingId ? 'Update Voucher' : 'Save (F2)'}
+          </button>
+          <button type="button" className="ghost-light-btn" onClick={() => handleSave(true)} disabled={busy} style={{ minWidth: '120px' }}>
+            {busy ? 'Working…' : editingId ? 'Update & Print' : 'Save & Print'}
           </button>
         </div>
       </section>

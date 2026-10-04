@@ -14467,8 +14467,8 @@ function PurchaseVoucherPanel({ products, parties, busy, onSave, onUpdate }) {
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", borderTop: "1px solid #e5e1d8", paddingTop: "16px" }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save Voucher" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save Voucher" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(VoucherHistory, { type: "purchase", refreshToken: historyKey, title: "Recent Purchase Vouchers", partyLabel: "Supplier", onEdit: loadForEdit })
@@ -14747,8 +14747,8 @@ function SaleReturnVoucherPanel({ products, parties, busy, onSave, onUpdate }) {
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", borderTop: "1px solid #eee", paddingTop: "16px" }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save (F2)" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save (F2)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(VoucherHistory, { type: "sale_return", refreshToken: historyKey, title: "Recent Sale Return Vouchers", partyLabel: "Customer", onEdit: loadForEdit })
@@ -15024,8 +15024,8 @@ function SaleVoucherPanel({ products, parties, busy, onSave, onUpdate }) {
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", borderTop: "1px solid #e8e8e8", paddingTop: "16px" }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save (F2)" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save (F2)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(VoucherHistory, { type: "sale", refreshToken: historyKey, title: "Recent Sales Vouchers", partyLabel: "Customer", onEdit: loadForEdit })
@@ -15301,8 +15301,8 @@ function PurchaseReturnVoucherPanel({ products, parties, busy, onSave, onUpdate 
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", borderTop: "1px solid #e8e8e8", paddingTop: "16px" }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save (F2)" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: () => handleSave(false), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Saving..." : editingId ? "Update Voucher" : "Save (F2)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "ghost-light-btn", onClick: () => handleSave(true), disabled: busy, style: { minWidth: "120px" }, children: busy ? "Working…" : editingId ? "Update & Print" : "Save & Print" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(VoucherHistory, { type: "purchase_return", refreshToken: historyKey, title: "Recent Purchase Return Vouchers", partyLabel: "Supplier", onEdit: loadForEdit })

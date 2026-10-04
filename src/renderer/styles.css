@@ -672,7 +672,12 @@ th {
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid #a7a08f;
+  border-bottom: 1px solid #a7a08f;
+}
+
+.daily-summary-table thead th {
+  border-bottom: 1px solid #8f8876;
 }
 
 .daily-summary-table th.num,
